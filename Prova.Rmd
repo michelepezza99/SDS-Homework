@@ -1,0 +1,179 @@
+---
+title: "Homework SDS"
+author: "Andrea De Vincenzo, Domenico Azzarito and Michele Pezza"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    css: "styles.css"  # Link to your custom CSS file
+fontsize: 12pt
+geometry: margin=1in 1in 1in 1in  # Set all margins to 1 inch
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Part 1 
+## 1. Bayes classification rule   $\eta^{*}(x)$
+$(Y,X)$ are random variables with $Y \in \{0,1\}$ and $X \in \mathbb{R}$.
+Suppose that
+
+$$
+(X \mid Y = 0) \sim \text{Unif}(-3, 1) \quad \text{and} \quad (X \mid Y = 1) \sim \text{Unif}(-1, 3)
+$$
+
+Further suppose that $\mathbb{P}(Y = 0) = \mathbb{P}(Y = 1) = \frac{1}{2}$.
+
+---
+
+The regression function is defined as follows:
+$$
+r(x) = \mathbb{E}(Y \mid X = x) = \mathbb{P}(Y=1 \mid X = x) = \dfrac{\pi_1f_1(x)}{\pi_1f_1(x) + (1-\pi_1)f_0(x)}
+$$
+
+where $\pi_1 = \mathbb{P}(Y = 1), f_1(x) = f(x \mid Y = 1) \text{ and }  f_0(x) = f(x \mid Y = 0)$.
+
+
+---
+
+The Bayes classification rule $\eta^{*}(x)$ is defined as:
+
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if } \mathbb{P}(Y = 1 | X = x) > \mathbb{P}(Y = 0 | X = x) \\
+0 & \text{otherwise}
+\end{cases} = \begin{cases}
+1 & \text{if } \pi_1f_1(x) > (1-\pi_1)f_0(x) \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+
+
+Since we have $\pi_1 = \pi_0 = \frac{1}{2}$:
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if } f_1(x) > f_0(x) \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+---
+
+In our setup:
+$$
+f_1(x) = 
+\begin{cases} 
+\frac{1}{4} & \text{if } -1 \leq x \leq 3 \\
+0 & \text{otherwise}
+\end{cases} 
+\quad \text{and} \quad f_0(x) = 
+\begin{cases} 
+\frac{1}{4} & \text{if } -3 \leq x \leq 1 \\
+0 & \text{otherwise}
+\end{cases} 
+$$
+
+---
+
++ $x < -3$:
+$$
+f_1(x) = 0, \; f_0(x) = 0 \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+$$
++ $-3 \leq x < -1$:
+$$
+f_1(x) = 0, \; f_0(x) = \frac{1}{4} \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+$$
++ $-1 \leq x \leq 1$:
+$$
+f_1(x) = \frac{1}{4}, \; f_0(x) = \frac{1}{4} \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+$$
++ $1 < x \leq 3$:
+$$
+f_1(x) = \frac{1}{4}, \; f_0(x) = 0 \Rightarrow f_1(x) > f_0(x) \Rightarrow \eta^{*}(x) = 1 
+$$
++ $x > 3$:
+$$
+f_1(x) = 0, \; f_0(x) = 0 \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0
+$$
+
+
+Hence, here the Bayes classification rule $\eta^{*}(x)$ is:
+
+
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if} \quad 1 < x \leq 3 \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+## 2. 
+Now, we generate a dataset of size $n = 1000$ from the joint data model $p(y, x) = p(x | y) \cdot p(y)$ described earlier. 
+The data will include samples drawn from the specified uniform distributions for $X$ conditioned on $Y$. 
+We will then use this dataset to visualize the decision boundaries of the Bayes classifier, evaluate its performance, and compare it with a logistic regression classifier. This process allows us to assess the effectiveness of each method in terms of classification accuracy.
+
+```{r point 2, echo=TRUE}
+set.seed(54) # We begin with setting the seed for reproducibility
+n = 1000 # Sample size
+p = 0.5 # Parameter for Bernoulli distribution
+# Define the distribution
+simulate = function(n){
+  y = rbinom(n, 1, p) # We generate Y ~ Ber(p = 0.5)
+  x = ifelse(y == 0, runif(n, -3, 1), runif(n, -1, 3))  # X conditional on Y
+  data.frame(x = x, y = y)
+}
+# We simulate one dataset
+data <- simulate(n)
+
+# We define the regression function
+reg_fun = function(x){
+  dunif(x,-1,3) / (dunif(x,-1,3) + dunif(x,-3,1))
+}
+
+# Plot the data
+plot(data$x, data$y, 
+     col = ifelse(data$y == 1, adjustcolor("darkred", alpha.f = 0.1), 
+                                  adjustcolor("darkblue", alpha.f = 0.1)), 
+     pch = 16, cex = 0.7, xlab = "X", ylab = "Y", 
+     main = "Generated data and Regression function", 
+     sub = expression(eta(x) == 1 ~ "if and only if" ~ r(x) > 0.5))
+
+# Plot the Regression Function r(x)
+x_seq <- seq(-3, 3, length.out = 1000)
+r_values <- reg_fun(x_seq)
+
+lines(x_seq, r_values, type = 's', 
+      col = adjustcolor("darkgreen", alpha.f = 0.4), # Adjust transparency with alpha.f
+      lwd = 3) # Line width
+
+
+# Add the regression function threshold
+abline(h = 0.5, lty = 3, lwd =2)
+
+# Add Legend
+legend("topleft", legend = c("Y = 0", "Y = 1", "r(x)",'threshold'), 
+       col = c('darkblue','darkred','darkgreen','black'), lty = c(0, 0, 1,3), 
+       pch = c(16, 16, NA,NA), pt.cex = c(0.7, 0.7, NA,NA), lwd = c(NA, NA, 2,2))
+```
+
+
+```{r point, echo=TRUE}
+# Define Bayes Classifier
+bayes_classifier <- function(x) {
+  ifelse(x > 1 & x <= 3, 1, 0)
+}
+
+# We evaluate its performance
+
+# Predict using the Bayes classifier
+data$y_pred <- bayes_classifier(data$x)
+
+accuracy <- mean(data$y == data$y_pred)
+cat("Accuracy of Bayes Classifier:", accuracy, "\n")
+
+```
+
