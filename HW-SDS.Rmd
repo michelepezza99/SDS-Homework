@@ -1,0 +1,285 @@
+---
+title: "Homework SDS"
+author: "Andrea De Vincenzo, Domenico Azzarito and Michele Pezza"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    css: "styles.css"  # Link to your custom CSS file
+fontsize: 12pt
+geometry: margin=1in 1in 1in 1in  # Set all margins to 1 inch
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Part 1 
+## 1. Bayes classification rule   $\eta^{*}(x)$
+$(Y,X)$ are random variables with $Y \in \{0,1\}$ and $X \in \mathbb{R}$.
+Suppose that
+
+$$
+(X \mid Y = 0) \sim \text{Unif}(-3, 1) \quad \text{and} \quad (X \mid Y = 1) \sim \text{Unif}(-1, 3)
+$$
+
+Further suppose that $\mathbb{P}(Y = 0) = \mathbb{P}(Y = 1) = \frac{1}{2}$.
+
+---
+
+The regression function is defined as follows:
+$$
+r(x) = \mathbb{E}(Y \mid X = x) = \mathbb{P}(Y=1 \mid X = x) = \dfrac{\pi_1f_1(x)}{\pi_1f_1(x) + (1-\pi_1)f_0(x)}
+$$
+
+where $\pi_1 = \mathbb{P}(Y = 1), f_1(x) = f(x \mid Y = 1) \text{ and }  f_0(x) = f(x \mid Y = 0)$.
+
+
+---
+
+The Bayes classification rule $\eta^{*}(x)$ is defined as:
+
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if } \mathbb{P}(Y = 1 | X = x) > \mathbb{P}(Y = 0 | X = x) \\
+0 & \text{otherwise}
+\end{cases} = \begin{cases}
+1 & \text{if } \pi_1f_1(x) > (1-\pi_1)f_0(x) \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+
+
+Since we have $\pi_1 = \pi_0 = \frac{1}{2}$:
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if } f_1(x) > f_0(x) \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+---
+
+In our setup:
+$$
+f_1(x) = 
+\begin{cases} 
+\frac{1}{4} & \text{if } -1 \leq x \leq 3 \\
+0 & \text{otherwise}
+\end{cases} 
+\quad \text{and} \quad f_0(x) = 
+\begin{cases} 
+\frac{1}{4} & \text{if } -3 \leq x \leq 1 \\
+0 & \text{otherwise}
+\end{cases} 
+$$
+
+---
+
++ $x < -3$:
+$$
+f_1(x) = 0, \; f_0(x) = 0 \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+$$
++ $-3 \leq x < -1$:
+$$
+f_1(x) = 0, \; f_0(x) = \frac{1}{4} \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+$$
++ $-1 \leq x \leq 1$:
+$$
+f_1(x) = \frac{1}{4}, \; f_0(x) = \frac{1}{4} \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+$$
++ $1 < x \leq 3$:
+$$
+f_1(x) = \frac{1}{4}, \; f_0(x) = 0 \Rightarrow f_1(x) > f_0(x) \Rightarrow \eta^{*}(x) = 1 
+$$
++ $x > 3$:
+$$
+f_1(x) = 0, \; f_0(x) = 0 \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0
+$$
+
+
+Hence, here the Bayes classification rule $\eta^{*}(x)$ is:
+
+
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if} \quad 1 < x \leq 3 \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+## 2.1 
+Now, we generate a dataset of size $n = 1000$ from the joint data model $p(y, x) = p(x | y) \cdot p(y)$ described earlier. 
+The data will include samples drawn from the specified uniform distributions for $X$ conditioned on $Y$. 
+We will then use this dataset to visualize the decision boundaries of the Bayes classifier, evaluate its performance, and compare it with another classifier. This process allows us to assess the effectiveness of each method in terms of classification accuracy.
+
+```{r point 1.2, echo=TRUE}
+set.seed(64) # We begin with setting the seed for reproducibility
+n = 1000 # Sample size 
+# Define the distribution
+simulate = function(n=1000, p = 0.5){
+  y = rbinom(n, 1, p) # We generate Y ~ Ber(p = 0.5)
+  x = ifelse(y == 0, runif(n, -3, 1), runif(n, -1, 3))  # X conditional on Y
+  data.frame(x = x, y = y)
+}
+# We simulate one dataset
+data <- simulate(n)
+
+# We define the regression function
+reg_fun = function(x){
+  dunif(x,-1,3) / (dunif(x,-1,3) + dunif(x,-3,1))
+}
+
+# Plot the data
+plot(data$x, data$y, 
+     col = ifelse(data$y == 1, adjustcolor("darkred", alpha.f = 0.1), 
+                                  adjustcolor("darkblue", alpha.f = 0.1)), 
+     pch = 16, cex = 0.7, xlab = "X", ylab = "Y", 
+     main = "Generated dataset and Regression function", 
+     sub = expression(eta(x) == 1 ~ "if and only if" ~ r(x) > 0.5))
+
+# Plot the Regression Function r(x)
+x_seq <- seq(-3, 3, length.out = 1000)
+r_values <- reg_fun(x_seq)
+
+lines(x_seq, r_values, type = 's', 
+      col = adjustcolor("darkgreen", alpha.f = 0.4), 
+      lwd = 3) 
+
+# Add the regression function threshold
+abline(h = 0.5, lty = 3, lwd =2)
+
+# Add Legend
+legend("topleft", legend = c("Y = 0", "Y = 1", "r(x)",'threshold'), 
+       col = c('darkblue','darkred','darkgreen','black'), lty = c(0, 0, 1,3), 
+       pch = c(16, 16, NA,NA), pt.cex = c(0.7, 0.7, NA,NA), lwd = c(NA, NA, 2,2))
+```
+
+
+This visualization shows the generated dataset and the regression function $r(x)$ used to model the probability of $Y = 1$. The blue points represent observations where the outcome is 0, and the red points represent observations where the outcome is 1. The green stepwise line represents the regression function $r(x)$, which models the posterior probability $\mathbb{P}(Y = 1 | X = x)$ based on the underlying distributions defined for $X$ given $Y$. The stepwise nature of the function reflects how probabilities change sharply at the boundaries, consistent with the uniform distributions specified in the data generation process. The dotted black horizontal line at $r(x) = 0.5$ acts as a classification threshold. According to the Bayes classifier, $\eta(x) = 1$ if and only if $r(x) > 0.5$. This decision rule splits the feature space into two regions: predicted as $Y = 0$ where $r(x) \leq 0.5$ and predicted as $Y = 1$ where $r(x) > 0.5$. 
+
+## 2.2
+
+Now, we focus on the evaluation of the Bayes classifier.
+```{r point 1.3, echo=TRUE}
+# Define Bayes Classifier
+bayes_classifier = function(x) {
+  ifelse(x > 1 & x <= 3, 1, 0)
+}
+
+# We evaluate its performance
+
+# Predict using the Bayes classifier
+data$y_pred = bayes_classifier(data$x)
+
+accuracy = mean(data$y == data$y_pred) * 100
+cat("Accuracy of Bayes Classifier: ", accuracy, "%\n",sep = '')
+
+```
+
+```{r, echo=TRUE}
+cat("Size of Y = 0: ", sum(data$y == 0), "\n")
+cat("Size of Y = 1: ", sum(data$y == 1), "\n")
+
+```
+
+Since the dataset is balanced, Accuracy alone is a reliable metric for evaluating the performance of the classifier.
+
+## 2.3
+Here, we consider a comparison between the Bayes classifier and the Logistic regression classifier.
+Logistic regression is a supervised machine learning algorithm used for binary classification problems. It models the probability that an observation belongs to the positive class, $Y = 1$, given input features, $X_1, \ldots, X_p$. The probability is modeled using the logistic (sigmoid) function:
+
+$$
+\mathbb{P}(Y = 1 | X) = \frac{1}{1 + e^{-z}}
+$$
+
+where $z = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \dots + \beta_p X_p$ is a linear combination of input features, and $\beta$ are coefficients estimated using Maximum Likelihood Estimation (MLE). Predictions are made by assigning $Y = 1$ if $\mathbb{P}(Y = 1 | X) > 0.5$ and $Y = 0$ otherwise. Logistic regression assumes a linear relationship between the features and the log-odds, independent observations, and no multicollinearity. 
+
+To implement our Logistic regression model, we first define a training set and a test set. We do not consider a validation set, since there are not any hyperparameters in our logistic regression model. The training and test sets are built by random splitting our simulated data into two subsets, where 80% of the data belongs to the training set and the other 20% to the test set.
+
+```{r}
+set.seed(36)
+n <- 1000  # Define sample size
+
+# Generate data for training
+data <- simulate(n)
+
+# Split the data into 80% training and 20% test sets
+train_index <- sample(1:n, size = floor(0.8 * n))  # 80% for training
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]  # 20% for testing
+
+# Train logistic regression on the training data
+logistic_model <- glm(y ~ x, data = train_data, family = binomial)
+
+# Predict probabilities for logistic regression on test data
+test_data$y_prob_logistic <- predict(logistic_model, newdata = test_data, type = "response")
+
+# Predict classes based on threshold 0.5
+test_data$y_pred_logistic <- ifelse(test_data$y_prob_logistic > 0.5, 1, 0)
+
+# Calculate accuracy for logistic regression
+accuracy_logistic <- mean(test_data$y == test_data$y_pred_logistic) * 100
+cat("Test Accuracy of Logistic Regression: ", accuracy_logistic, "%\n")
+
+
+
+```
+
+```{r, echo=TRUE}
+set.seed(47)
+# Number of repetitions
+M <- 10000
+n <- 1000
+
+# Initialize vectors to store accuracies
+accuracy_bayes <- numeric(M)
+accuracy_logistic <- numeric(M)
+
+# Loop for repeated sampling
+for (i in 1:M) {
+  
+  # Generate new dataset
+  data <- simulate(n)
+
+  # Split the data into 80% training and 20% test sets
+  train_index <- sample(1:n, size = floor(0.8 * n))  # 80% for training
+  train_data <- data[train_index, ]
+  test_data <- data[-train_index, ]  # 20% for testing
+
+  # Bayes Classifier: Train on all data, predict on test data
+  test_data$y_pred_bayes <- bayes_classifier(test_data$x)
+  accuracy_bayes[i] <- mean(test_data$y == test_data$y_pred_bayes)
+
+  # Logistic Regression: Train on the training dataset
+  logistic_model <- glm(y ~ x, data = train_data, family = binomial)
+
+  # Predict probabilities for logistic regression on test data
+  test_data$y_prob_logistic <- predict(logistic_model, newdata = test_data, type = "response")
+
+  # Predict classes based on threshold 0.5
+  test_data$y_pred_logistic <- ifelse(test_data$y_prob_logistic > 0.5, 1, 0)
+  
+  # Calculate accuracy for logistic regression on test data
+  accuracy_logistic[i] <- mean(test_data$y == test_data$y_pred_logistic)
+}
+
+# Compute mean accuracies
+mean_accuracy_bayes <- mean(accuracy_bayes) * 100
+mean_accuracy_logistic <- mean(accuracy_logistic) * 100
+
+# Print results
+cat("Mean Accuracy of Bayes Classifier over", M, "samples: ", mean_accuracy_bayes, "%\n")
+cat("Mean Accuracy of Logistic Regression over", M, "samples: ", mean_accuracy_logistic, "%\n")
+
+
+
+```
+```{r}
+
+```
+
+
