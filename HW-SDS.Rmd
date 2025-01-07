@@ -117,21 +117,13 @@ The data will include samples drawn from the specified uniform distributions for
 We will then use this dataset to visualize the decision boundaries of the Bayes classifier, evaluate its performance, and compare it with another classifier. This process allows us to assess the effectiveness of each method in terms of classification accuracy.
 
 ```{r point 1.2, echo=TRUE}
+source('Functions.R')
 set.seed(64) # We begin with setting the seed for reproducibility
 n = 1000 # Sample size 
 # Define the distribution
-simulate = function(n=1000, p = 0.5){
-  y = rbinom(n, 1, p) # We generate Y ~ Ber(p = 0.5)
-  x = ifelse(y == 0, runif(n, -3, 1), runif(n, -1, 3))  # X conditional on Y
-  data.frame(x = x, y = y)
-}
+
 # We simulate one dataset
 data <- simulate(n)
-
-# We define the regression function
-reg_fun = function(x){
-  dunif(x,-1,3) / (dunif(x,-1,3) + dunif(x,-3,1))
-}
 
 # Plot the data
 plot(data$x, data$y, 
@@ -165,11 +157,6 @@ This visualization shows the generated dataset and the regression function $r(x)
 
 Now, we focus on the evaluation of the Bayes classifier.
 ```{r point 1.3, echo=TRUE}
-# Define Bayes Classifier
-bayes_classifier = function(x) {
-  ifelse(x > 1 & x <= 3, 1, 0)
-}
-
 # We evaluate its performance
 
 # Predict using the Bayes classifier
@@ -267,19 +254,18 @@ for (i in 1:M) {
   accuracy_logistic[i] <- mean(test_data$y == test_data$y_pred_logistic)
 }
 
+
+```
+
+```{r}
 # Compute mean accuracies
 mean_accuracy_bayes <- mean(accuracy_bayes) * 100
 mean_accuracy_logistic <- mean(accuracy_logistic) * 100
 
+
 # Print results
-cat("Mean Accuracy of Bayes Classifier over", M, "samples: ", mean_accuracy_bayes, "%\n")
-cat("Mean Accuracy of Logistic Regression over", M, "samples: ", mean_accuracy_logistic, "%\n")
-
-
-
-```
-```{r}
-
+cat("Mean Accuracy of Bayes Classifier over", M, "samples:", mean_accuracy_bayes, "%\n")
+cat("Mean Accuracy of Logistic Regression over", M, "samples:", mean_accuracy_logistic, "%\n")
 ```
 
 
