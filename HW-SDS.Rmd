@@ -114,16 +114,16 @@ $$
 ## 2.1 
 Now, we generate a dataset of size $n = 1000$ from the joint data model $p(y, x) = p(x | y) \cdot p(y)$ described earlier. 
 The data will include samples drawn from the specified uniform distributions for $X$ conditioned on $Y$. 
-We will then use this dataset to visualize the decision boundaries of the Bayes classifier, evaluate its performance, and compare it with another classifier. This process allows us to assess the effectiveness of each method in terms of classification accuracy.
+We will then visualize the generated dataset.
 
 ```{r point 1.2, echo=TRUE}
 source('Functions.R')
-set.seed(64) # We begin with setting the seed for reproducibility
-n = 1000 # Sample size 
+set.seed(54) # We begin with setting the seed for reproducibility
+n <- 1000 # Sample size 
 # Define the distribution
 
 # We simulate one dataset
-data <- simulate(n)
+data <- simulate(n)  # defined in 'Functions.R'
 
 # Plot the data
 plot(data$x, data$y, 
@@ -135,7 +135,7 @@ plot(data$x, data$y,
 
 # Plot the Regression Function r(x)
 x_seq <- seq(-3, 3, length.out = 1000)
-r_values <- reg_fun(x_seq)
+r_values <- reg_fun(x_seq)   # 
 
 lines(x_seq, r_values, type = 's', 
       col = adjustcolor("darkgreen", alpha.f = 0.4), 
@@ -160,9 +160,9 @@ Now, we focus on the evaluation of the Bayes classifier.
 # We evaluate its performance
 
 # Predict using the Bayes classifier
-data$y_pred = bayes_classifier(data$x)
+data$y_pred <- bayes_classifier(data$x)
 
-accuracy = mean(data$y == data$y_pred) * 100
+accuracy <- mean(data$y == data$y_pred) * 100
 cat("Accuracy of Bayes Classifier: ", accuracy, "%\n",sep = '')
 
 ```
@@ -177,50 +177,58 @@ Since the dataset is balanced, Accuracy alone is a reliable metric for evaluatin
 
 ## 2.3
 Here, we consider a comparison between the Bayes classifier and the Logistic regression classifier.
+
 Logistic regression is a supervised machine learning algorithm used for binary classification problems. It models the probability that an observation belongs to the positive class, $Y = 1$, given input features, $X_1, \ldots, X_p$. The probability is modeled using the logistic (sigmoid) function:
 
 $$
 \mathbb{P}(Y = 1 | X) = \frac{1}{1 + e^{-z}}
 $$
 
-where $z = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \dots + \beta_p X_p$ is a linear combination of input features, and $\beta$ are coefficients estimated using Maximum Likelihood Estimation (MLE). Predictions are made by assigning $Y = 1$ if $\mathbb{P}(Y = 1 | X) > 0.5$ and $Y = 0$ otherwise. Logistic regression assumes a linear relationship between the features and the log-odds, independent observations, and no multicollinearity. 
+where $z = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \dots + \beta_p X_p$ is a linear combination of input features, and $\beta$ are parameters estimated using Maximum Likelihood Estimation (MLE). Predictions are made by assigning $Y = 1$ if $\mathbb{P}(Y = 1 | X) > 0.5$ and $Y = 0$ otherwise. Logistic regression assumes a linear relationship between the features and the log-odds, independent observations, and no multicollinearity. 
 
-To implement our Logistic regression model, we first define a training set and a test set. We do not consider a validation set, since there are not any hyperparameters in our logistic regression model. The training and test sets are built by random splitting our simulated data into two subsets, where 80% of the data belongs to the training set and the other 20% to the test set.
+To implement our logistic regression model, we use $k$-fold cross-validation to evaluate its performance. Specifically, we partition the simulated dataset into $k = 5$ folds, ensuring that each observation is used for both training and validation at least once. In each iteration, one fold serves as the validation set, while the remaining $k-1$ folds are combined to form the training set.
+
+The logistic regression model is trained on the training set, and predictions are made on the validation set. The model's accuracy is calculated for each fold, and the process is repeated for all $k$ folds. Finally, the cross-validated accuracy is obtained by averaging the accuracies across all folds, providing a robust estimate of the model's performance.
+
+By using $k$-fold cross-validation, we ensure a more reliable evaluation compared to a single train-test split, as all data points contribute to both training and validation, mitigating potential biases due to random partitioning.
+
 
 ```{r}
-set.seed(36)
-n <- 1000  # Define sample size
+set.seed(54)
 
-# Generate data for training
-data <- simulate(n)
+# Perform 5-fold cross-validation using the defined function
+mean_accuracy <- cross_validate(data, k = 5)
 
-# Split the data into 80% training and 20% test sets
-train_index <- sample(1:n, size = floor(0.8 * n))  # 80% for training
-train_data <- data[train_index, ]
-test_data <- data[-train_index, ]  # 20% for testing
+# Print the result
+cat("Mean Cross-Validated Accuracy: ", mean_accuracy, "%\n")
 
-# Train logistic regression on the training data
-logistic_model <- glm(y ~ x, data = train_data, family = binomial)
-
-# Predict probabilities for logistic regression on test data
-test_data$y_prob_logistic <- predict(logistic_model, newdata = test_data, type = "response")
-
-# Predict classes based on threshold 0.5
-test_data$y_pred_logistic <- ifelse(test_data$y_prob_logistic > 0.5, 1, 0)
-
-# Calculate accuracy for logistic regression
-accuracy_logistic <- mean(test_data$y == test_data$y_pred_logistic) * 100
-cat("Test Accuracy of Logistic Regression: ", accuracy_logistic, "%\n")
 
 
 
 ```
 
+The two accuracies—76% for the Bayes classifier and 74.5% for the logistic regression model evaluated using 5-fold cross-validation—reflect the performance differences between the theoretical and practical classifiers.
+
+The Bayes classifier achieves a slightly higher accuracy as it directly leverages the known underlying data-generating process, making it the optimal theoretical benchmark for classification in this setup. In contrast, logistic regression relies on learning the decision boundary from the data, which introduces slight variability and a minor performance drop due to the practical challenges of model estimation and potential misalignment with the true data distribution.
+
+The difference is small, suggesting that logistic regression performs reasonably well, even though it does not have access to the exact data-generating process. This highlights logistic regression's robustness and adaptability as a practical classifier in real-world scenarios.
+
+
+## 3. Repeated Sampling
+
+In this section, we perform a repeated sampling experiment to compare the performance of the Bayes classifier and logistic regression. Specifically, we simulate $M = 10,000$ datasets, each with $n = 1,000$ observations, drawn from the specified data-generating process. 
+
+For each simulated dataset:
+1. The Bayes classifier is applied to the entire dataset, and its accuracy is recorded. This serves as the theoretical benchmark since it directly leverages the known underlying distributions.
+2. Logistic regression is evaluated using 5-fold cross-validation on the same dataset. The cross-validated accuracy is recorded to represent the practical performance of a data-driven classifier.
+
+After $M$ repetitions, we calculate the mean and standard deviation of accuracies for both classifiers. This repeated sampling approach provides insights into the average performance and variability of the classifiers, enabling a robust comparison under simulated conditions.
+
+
 ```{r, echo=TRUE}
-set.seed(47)
-# Number of repetitions
-M <- 10000
-n <- 1000
+set.seed(54)
+M <- 10000  # Number of repetitions
+n <- 1000   # Sample size
 
 # Initialize vectors to store accuracies
 accuracy_bayes <- numeric(M)
@@ -228,44 +236,41 @@ accuracy_logistic <- numeric(M)
 
 # Loop for repeated sampling
 for (i in 1:M) {
-  
   # Generate new dataset
   data <- simulate(n)
-
-  # Split the data into 80% training and 20% test sets
-  train_index <- sample(1:n, size = floor(0.8 * n))  # 80% for training
-  train_data <- data[train_index, ]
-  test_data <- data[-train_index, ]  # 20% for testing
-
-  # Bayes Classifier: Train on all data, predict on test data
-  test_data$y_pred_bayes <- bayes_classifier(test_data$x)
-  accuracy_bayes[i] <- mean(test_data$y == test_data$y_pred_bayes)
-
-  # Logistic Regression: Train on the training dataset
-  logistic_model <- glm(y ~ x, data = train_data, family = binomial)
-
-  # Predict probabilities for logistic regression on test data
-  test_data$y_prob_logistic <- predict(logistic_model, newdata = test_data, type = "response")
-
-  # Predict classes based on threshold 0.5
-  test_data$y_pred_logistic <- ifelse(test_data$y_prob_logistic > 0.5, 1, 0)
   
-  # Calculate accuracy for logistic regression on test data
-  accuracy_logistic[i] <- mean(test_data$y == test_data$y_pred_logistic)
+  # Bayes Classifier: Evaluate on all data
+  data$y_pred <- bayes_classifier(data$x)
+  accuracy_bayes[i] <- mean(data$y == data$y_pred)
+  
+  # Logistic Regression: Use cross-validation
+  accuracy_logistic[i] <- cross_validate(data, k = 5)
 }
+
+# Compute summary statistics
+mean_bayes <- mean(accuracy_bayes) * 100
+mean_logistic <- mean(accuracy_logistic) 
+sd_bayes <- sd(accuracy_bayes) * 100
+sd_logistic <- sd(accuracy_logistic) 
+
+cat("Bayes Classifier - Mean Accuracy: ", mean_bayes, "%, Std Dev: ", sd_bayes, "%\n")
+cat("Logistic Regression - Mean Accuracy: ", mean_logistic, "%, Std Dev: ", sd_logistic, "%\n")
+
 
 
 ```
 
+The results of the repeated sampling experiment show that logistic regression slightly outperforms the Bayes classifier. The **Bayes classifier** achieves a mean accuracy of approximately 74.98% with a standard deviation of 1.38%, while **logistic regression**, evaluated using 5-fold cross-validation, attains a slightly higher mean accuracy of 75.02% with a lower standard deviation of 1.37%.
+
+The slight edge in performance for logistic regression may seem counterintuitive, as the Bayes classifier is theoretically optimal under the assumption that the data-generating process is perfectly known. However, this outcome highlights an important distinction: while the Bayes classifier relies entirely on the assumed uniform distributions for $X \mid Y$, logistic regression leverages the data itself to learn the decision boundary. This data-driven approach allows logistic regression to adapt to small deviations or noise in the simulated data that might not perfectly align with the assumed theoretical distributions.
+
+Moreover, the cross-validation process used for logistic regression helps mitigate overfitting by effectively utilizing the dataset to generalize better across folds. This adaptability gives logistic regression a practical advantage in real-world scenarios where the true underlying distribution is unknown or subject to variability.
+
+Overall, these results underscore the power of logistic regression as a flexible and robust classifier, capable of achieving performance comparable to or even surpassing theoretical benchmarks like the Bayes classifier in applied settings.
+
+
 ```{r}
-# Compute mean accuracies
-mean_accuracy_bayes <- mean(accuracy_bayes) * 100
-mean_accuracy_logistic <- mean(accuracy_logistic) * 100
 
-
-# Print results
-cat("Mean Accuracy of Bayes Classifier over", M, "samples:", mean_accuracy_bayes, "%\n")
-cat("Mean Accuracy of Logistic Regression over", M, "samples:", mean_accuracy_logistic, "%\n")
 ```
 
 
