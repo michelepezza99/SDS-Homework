@@ -160,7 +160,7 @@ Now, we focus on the evaluation of the Bayes classifier.
 # We evaluate its performance
 
 # Predict using the Bayes classifier
-data$y_pred <- bayes_classifier(data$x)
+data$y_pred <- bayes_classifier(data$x)     # function defined in 'Functions.R'
 
 accuracy <- mean(data$y == data$y_pred) * 100
 cat("Accuracy of Bayes Classifier: ", accuracy, "%\n",sep = '')
@@ -197,7 +197,7 @@ By using $k$-fold cross-validation, we ensure a more reliable evaluation compare
 set.seed(54)
 
 # Perform 5-fold cross-validation using the defined function
-mean_accuracy <- cross_validate(data, k = 5)
+mean_accuracy <- cross_validate(data, k = 5)    # defined in 'Functions.R'
 
 # Print the result
 cat("Mean Cross-Validated Accuracy: ", mean_accuracy, "%\n")
@@ -207,11 +207,10 @@ cat("Mean Cross-Validated Accuracy: ", mean_accuracy, "%\n")
 
 ```
 
-The two accuracies—76% for the Bayes classifier and 74.5% for the logistic regression model evaluated using 5-fold cross-validation—reflect the performance differences between the theoretical and practical classifiers.
+The two accuracies — 73.3% for the Bayes classifier and 72.5% for the logistic regression model evaluated using 5-fold cross-validation — reflect the performance differences between the theoretical and practical classifiers.
 
 The Bayes classifier achieves a slightly higher accuracy as it directly leverages the known underlying data-generating process, making it the optimal theoretical benchmark for classification in this setup. In contrast, logistic regression relies on learning the decision boundary from the data, which introduces slight variability and a minor performance drop due to the practical challenges of model estimation and potential misalignment with the true data distribution.
 
-The difference is small, suggesting that logistic regression performs reasonably well, even though it does not have access to the exact data-generating process. This highlights logistic regression's robustness and adaptability as a practical classifier in real-world scenarios.
 
 
 ## 3. Repeated Sampling
@@ -219,10 +218,12 @@ The difference is small, suggesting that logistic regression performs reasonably
 In this section, we perform a repeated sampling experiment to compare the performance of the Bayes classifier and logistic regression. Specifically, we simulate $M = 10,000$ datasets, each with $n = 1,000$ observations, drawn from the specified data-generating process. 
 
 For each simulated dataset:
+
 1. The Bayes classifier is applied to the entire dataset, and its accuracy is recorded. This serves as the theoretical benchmark since it directly leverages the known underlying distributions.
+
 2. Logistic regression is evaluated using 5-fold cross-validation on the same dataset. The cross-validated accuracy is recorded to represent the practical performance of a data-driven classifier.
 
-After $M$ repetitions, we calculate the mean and standard deviation of accuracies for both classifiers. This repeated sampling approach provides insights into the average performance and variability of the classifiers, enabling a robust comparison under simulated conditions.
+After $M$ repetitions, we calculate the mean and standard deviation of accuracies for both classifiers. 
 
 
 ```{r, echo=TRUE}

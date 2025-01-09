@@ -1,4 +1,4 @@
-# Function: simulate
+# 1. Function: simulate
 # Purpose: To generate a dataset with two variables, X and Y. Y is a binary random variable 
 #          following a Bernoulli distribution, and X is a continuous random variable whose 
 #          distribution depends on the value of Y.
@@ -22,7 +22,7 @@ simulate = function(n=1000, p = 0.5){
 }
 
 
-# Function: bayes_classifier
+# 2. Function: bayes_classifier
 # Purpose: A simple Bayes classifier based on the problem setup where X is a continuous variable 
 #          and Y is binary. The classifier assigns Y = 1 if X is between 1 and 3, and Y = 0 otherwise.
 #
@@ -39,7 +39,7 @@ bayes_classifier = function(x) {
 }
 
 
-# Function: reg_fun
+# 3. Function: reg_fun
 # Purpose: The regression function used to compute the probability that Y = 1 given X = x.
 #          It computes the posterior probability based on a simple mixture model of two uniform
 #          distributions (f1 and f0) corresponding to the two possible values of Y (0 and 1).
@@ -55,6 +55,7 @@ reg_fun = function(x) {
   dunif(x, -1, 3) / (dunif(x, -1, 3) + dunif(x, -3, 1))
 }
 
+# 4.
 
 cross_validate <- function(data, k = 5) {
   # Create folds
