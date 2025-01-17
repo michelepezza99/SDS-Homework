@@ -13,7 +13,15 @@ geometry: margin=1in 1in 1in 1in  # Set all margins to 1 inch
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Part 1 
+# Part 1
+
+In this part, we work on deriving and understanding the Bayes classification rule, denoted as $\eta^*(x)$, in a simple binary classification scenario. The goal of this rule is to minimize classification errors by assigning each observation to the class with the higher posterior probability.
+
+Here, we assume $Y \in \{0, 1\}$ is a binary outcome, and $X \in \mathbb{R}$ is a continuous feature. The conditional distributions of $X$ given $Y$ are defined as uniform distributions, and both classes have equal prior probabilities. Using this setup, we derive the regression function $r(x)$, which gives the conditional probability $\mathbb{P}(Y=1 \mid X=x)$, and use it to define the decision rule.
+
+In this section, we break down the steps to calculate $\eta^*(x)$ by comparing the conditional densities $f_0(x)$ and $f_1(x)$ for the two classes. This leads to a clear definition of the decision boundary, showing how the optimal rule can be applied to classify observations based on their feature values. 
+
+
 ## 1. Bayes classification rule   $\eta^{*}(x)$
 $(Y,X)$ are random variables with $Y \in \{0,1\}$ and $X \in \mathbb{R}$.
 Suppose that
@@ -227,35 +235,35 @@ After $M$ repetitions, we calculate the mean and standard deviation of accuracie
 
 
 ```{r, echo=TRUE}
-set.seed(54)
-M <- 10000  # Number of repetitions
-n <- 1000   # Sample size
-
-# Initialize vectors to store accuracies
-accuracy_bayes <- numeric(M)
-accuracy_logistic <- numeric(M)
-
-# Loop for repeated sampling
-for (i in 1:M) {
-  # Generate new dataset
-  data <- simulate(n)
-  
-  # Bayes Classifier: Evaluate on all data
-  data$y_pred <- bayes_classifier(data$x)
-  accuracy_bayes[i] <- mean(data$y == data$y_pred)
-  
-  # Logistic Regression: Use cross-validation
-  accuracy_logistic[i] <- cross_validate(data, k = 5)
-}
-
-# Compute summary statistics
-mean_bayes <- mean(accuracy_bayes) * 100
-mean_logistic <- mean(accuracy_logistic) 
-sd_bayes <- sd(accuracy_bayes) * 100
-sd_logistic <- sd(accuracy_logistic) 
-
-cat("Bayes Classifier - Mean Accuracy: ", mean_bayes, "%, Std Dev: ", sd_bayes, "%\n")
-cat("Logistic Regression - Mean Accuracy: ", mean_logistic, "%, Std Dev: ", sd_logistic, "%\n")
+# set.seed(54)
+# M <- 10000  # Number of repetitions
+# n <- 1000   # Sample size
+# 
+# # Initialize vectors to store accuracies
+# accuracy_bayes <- numeric(M)
+# accuracy_logistic <- numeric(M)
+# 
+# # Loop for repeated sampling
+# for (i in 1:M) {
+#   # Generate new dataset
+#   data <- simulate(n)
+#   
+#   # Bayes Classifier: Evaluate on all data
+#   data$y_pred <- bayes_classifier(data$x)
+#   accuracy_bayes[i] <- mean(data$y == data$y_pred)
+#   
+#   # Logistic Regression: Use cross-validation
+#   accuracy_logistic[i] <- cross_validate(data, k = 5)
+# }
+# 
+# # Compute summary statistics
+# mean_bayes <- mean(accuracy_bayes) * 100
+# mean_logistic <- mean(accuracy_logistic) 
+# sd_bayes <- sd(accuracy_bayes) * 100
+# sd_logistic <- sd(accuracy_logistic) 
+# 
+# cat("Bayes Classifier - Mean Accuracy: ", mean_bayes, "%, Std Dev: ", sd_bayes, "%\n")
+# cat("logistic regression - mean accuracy: ", mean_logistic, "%, std dev: ", sd_logistic, "%\n")
 
 
 
@@ -268,6 +276,70 @@ The slight edge in performance for logistic regression may seem counterintuitive
 Moreover, the cross-validation process used for logistic regression helps mitigate overfitting by effectively utilizing the dataset to generalize better across folds. This adaptability gives logistic regression a practical advantage in real-world scenarios where the true underlying distribution is unknown or subject to variability.
 
 Overall, these results underscore the power of logistic regression as a flexible and robust classifier, capable of achieving performance comparable to or even surpassing theoretical benchmarks like the Bayes classifier in applied settings.
+
+
+# Part 2
+
+
+In this section, we aim to summarize and present the core methodology described by Jerome H. Friedman in his paper on multivariate goodness-of-fit and two-sample testing. Our approach is to distill the key steps into a clear and well-structured pseudo-code, providing a high-level overview of the testing procedure.
+
+We begin by outlining how to generate and process the datasets, followed by leveraging a binary classifier to assign scores that differentiate the two samples. These scores are then analyzed using univariate two-sample tests, such as Mann-Whitney or Kolmogorov-Smirnov, which act as baseline methods for assessing distributional differences. Finally, we describe how the null hypothesis is tested and interpreted to draw meaningful conclusions.
+
+Our goal is to highlight how machine learning techniques, particularly binary classifiers, can be effectively combined with traditional statistical methods to address complex multivariate testing problems. This pseudo-code is intended to serve as a guide for implementing the procedure in practice while ensuring clarity and precision.
+
+
+## Pseudo-code for Friedman's paper
+
+---
+
+1. Generate Datasets:
+   - Start with two datasets:
+     - Sample 1: $\{x_i\}$ with $N$ observations drawn from $p(x)$.
+     - Sample 2: $\{z_i\}$ with $M$ observations drawn from $q(x)$.
+
+2. Combine the Datasets:
+   - Merge the two datasets into one:
+     - $\{u_i\} = \{x_i\} \cup \{z_i\}$.
+   - Assign labels to identify the origin of each observation:
+     - Assign $y_i = 1$ for data points from Sample 1 ($\{x_i\}$).
+     - Assign $y_i = -1$ for data points from Sample 2 ($\{z_i\}$).
+
+3. Train a Binary Classifier:
+   - Use a machine learning model (e.g. logistic regression) to classify the combined data.
+   - Input: The dataset $\{u_i\}$.
+   - Output: Scores $\{s_i\}$ for each data point, where $s_i = F(u_i)$ is the score assigned by the classifier.
+
+4. Compute Scores for Each Sample:
+   - Split the scores into two groups based on their original datasets:
+     - $S^+ = \{s_i \, \text{for all } x_i \, \text{(Sample 1)}\}$.
+     - $S^- = \{s_i \, \text{for all } z_i \, \text{(Sample 2)}\}$.
+
+5. Perform a Two-Sample Test:
+   - Apply a univariate two-sample test (like Mann-Whitney or Kolmogorov-Smirnov) on the scores:
+     - Compute the test statistic: $t = T(S^+, S^-)$.
+
+6. Test the Null Hypothesis:
+   - Estimate the null distribution for the test statistic:
+     - If different datasets are used for training and scoring:
+       - Use the standard null distribution (e.g., for Mann-Whitney or Kolmogorov-Smirnov).
+     - If the same dataset is used for both training and scoring:
+       - Use a permutation test to create the null distribution.
+   - Compare the observed test statistic $t$ to the critical value for a chosen significance level $\alpha$.
+   - Reject the null hypothesis ($p = q$) if $t$ is greater than the critical value.
+
+7. Draw a Conclusion:
+   - Based on the significance test, decide whether to reject or fail to reject the null hypothesis.
+   - If rejected, conclude that the two samples are likely drawn from different distributions.
+
+---
+
+Friedman suggests using the **Mann-Whitney** and **Kolmogorov-Smirnov** (KS) tests as baseline methods because they are simple, reliable, and effective for comparing two distributions. Both tests are **univariate** and **non-parametric**, which means they don’t rely on the data following a specific distribution. This makes them flexible and applicable in many different situations.
+
+The Mann-Whitney test is particularly helpful when we want to compare the central tendencies, such as the medians, of two groups. It works by ranking all the observations and comparing the ranks between the two samples, making it ideal for identifying whether the central values of the groups differ. In contrast, the KS test looks at the overall shape of the distributions by comparing their cumulative distribution functions (CDFs). This allows it to detect differences in not just central tendencies but also in spread, shape, or location, providing a broader perspective.
+
+These tests are great starting points because they are **easy to understand and implement**. They don’t require complicated calculations, and their **non-parametric nature** makes them adaptable to different types of data **without needing strict assumptions**. Since Friedman's method generates univariate scores from the classifier, these tests are perfectly suited to evaluate those scores, ensuring they align well with the problem at hand.
+
+
 
 
 ```{r}
