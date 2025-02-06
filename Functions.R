@@ -57,31 +57,4 @@ reg_fun = function(x) {
 
 # 4.
 
-cross_validate <- function(data, k = 5) {
-  # Create folds
-  folds <- cut(seq(1, nrow(data)), breaks = k, labels = FALSE)
-  
-  # Initialize a vector to store accuracies
-  cv_accuracies <- numeric(k)
-  
-  # Perform k-fold cross-validation
-  for (i in 1:k) {
-    # Split the data into training and validation sets
-    test_indices <- which(folds == i, arr.ind = TRUE)
-    train_data <- data[-test_indices, ]
-    test_data <- data[test_indices, ]
-    
-    # Train logistic regression on training data
-    logistic_model <- glm(y ~ x, data = train_data, family = binomial)
-    
-    # Predict on validation data
-    test_data$y_prob <- predict(logistic_model, newdata = test_data, type = "response")
-    test_data$y_pred <- ifelse(test_data$y_prob > 0.5, 1, 0)
-    
-    # Calculate accuracy
-    cv_accuracies[i] <- mean(test_data$y == test_data$y_pred)
-  }
-  
-  # Return the mean accuracy
-  mean(cv_accuracies) * 100
-}
+
