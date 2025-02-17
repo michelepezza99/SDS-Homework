@@ -669,7 +669,7 @@ For each simulated dataset:
     recorded, representing the practical performance of a data-driven
     classifier.
 
-After $M$ repetitions, we compute the mean and standard deviation of the
+After $M$ repetitions, we compute the mean of the
 accuracies for both classifiers to assess their overall performance.
 
 ```{r, echo=TRUE}
