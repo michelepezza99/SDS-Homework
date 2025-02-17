@@ -4,13 +4,8 @@ author: "Andrea De Vincenzo, Domenico Azzarito and Michele Pezza"
 date: "`r Sys.Date()`"
 output:
   html_document:
-    css: "styles.css"  # Link to your custom CSS file
-fontsize: 12pt
-geometry: margin=1in 1in 1in 1in  # Set all margins to 1 inch
-editor_options: 
-  markdown: 
-    wrap: 72
 ---
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -201,10 +196,227 @@ cat("Size of Y = 1: ", sum(data$y == 1), "\n")
 
 ```
 
-Since the dataset is balanced, Accuracy alone is a reliable metric for
-evaluating the performance of the classifier.
+Since the dataset is highly balanced, Accuracy is a reasonable metric
+for evaluating the performance of the classifier.
 
-## 2.3
+An accuracy of 73.3% for the Bayes classifier means that **73.3% of all predictions match the true class labels** in the dataset. This value reflects the proportion of correctly classified instances out of the total number of observations.  
+
+Since the Bayes classifier is theoretically optimal under the assumed probability distributions, this accuracy represents the best possible performance given the uniform distributions of \( X \mid Y \). However, this does not imply perfect classification. The classifier minimizes the overall error rate but does so by prioritizing specificity, which results in a high number of **false negatives** while avoiding **false positives** entirely.  
+
+Thus, while 73.3% accuracy indicates strong performance, it must be interpreted alongside other metrics, such as recall and precision, to fully understand its classification behavior.
+
+
+```{r, echo=TRUE}
+# Compute Confusion Matrix
+table_bayes <- table(Predicted = data$y_pred, Actual = data$y)
+
+# Print Results
+cat("Bayes Classifier Performance Metrics:\n")
+cat("\nConfusion Matrix:\n")
+print(table_bayes)
+
+```
+
+The misclassification pattern observed in the Bayes classifier stems
+directly from the probabilistic properties of the data-generating
+process. The conditional distributions of $X$ given $Y$ are defined as:
+
+$$
+(X \mid Y = 0) \sim \text{Unif}(-3,1), \quad (X \mid Y = 1) \sim \text{Unif}(-1,3)
+$$
+
+Both distributions are uniform over their respective intervals. Since
+the Bayes classifier assigns $Y = 1$ when the posterior probability
+$P(Y = 1 \mid X)$ exceeds $0.5$, the decision boundary is determined by:
+
+$$
+P(Y = 1 \mid X) = \frac{\pi_1 f_1(X)}{\pi_1 f_1(X) + \pi_0 f_0(X)}
+$$
+
+where $\pi_1 = P(Y = 1)$ and $\pi_0 = P(Y = 0)$ are the class priors,
+both equal to $0.5$. Given that both conditional densities are uniform,
+the decision threshold occurs at $X = 1$. This implies:
+
+-   **For** $X > 1$, the classifier predicts $Y = 1$, as
+    $P(Y = 1 \mid X) > 0.5$.\
+-   **For** $X \leq 1$, the classifier predicts $Y = 0$, as
+    $P(Y = 0 \mid X) \geq P(Y = 1 \mid X)$.
+
+### Misclassification Analysis
+
+The overlap between the two conditional distributions exists in the
+range $[-1,1]$. Within this region, both classes have nonzero
+probability, but the Bayes classifier **always predicts** $Y = 0$, as
+the posterior probability favors class $Y = 0$. This leads to
+**systematic misclassification of some** $Y = 1$ observations,
+contributing to a high false negative rate.
+
+### Confusion Matrix Breakdown
+
+-   **False Negatives (267 cases):**\
+    These occur because observations where $Y = 1$ and $X \in [-1,1]$
+    are incorrectly classified as $Y = 0$.\
+-   **True Positives (226 cases):**\
+    These correspond to instances where $Y = 1$ and $X > 1$, which are
+    correctly identified by the classifier. Given the uniform nature of
+    $X \mid Y = 1$, approximately half of the $Y = 1$ cases fall within
+    this range.\
+-   **No False Positives:**\
+    The classifier never predicts $Y = 1$ when the true label is
+    $Y = 0$, ensuring perfect specificity but reducing recall.
+
+```{r}
+# Extract elements from the confusion matrix
+TP <- table_bayes[2,2]
+TN <- table_bayes[1,1]
+FP <- table_bayes[2,1]
+FN <- table_bayes[1,2]
+
+# Compute Precision, Recall, and F1-score
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Print Results
+cat("\nPrecision: ", round(precision, 4), "\n")
+cat("Recall: ", round(recall, 4), "\n")
+cat("F1-score: ", round(f1_score, 4), "\n")
+
+
+```
+
+#### 1. Precision = 1 (100%)
+
+-   Precision is the proportion of correctly predicted positives
+    ($Y = 1$) out of all instances predicted as $Y = 1$.\
+-   A precision of 100% means that every time the classifier predicts
+    $Y = 1$, it is always correct.\
+-   This aligns with the confusion matrix, where there are zero false
+    positives ($FP = 0$)—the classifier never predicts $Y = 1$ when the
+    true class is $Y = 0$.\
+-   High precision indicates that the classifier is conservative in
+    assigning $Y = 1$ and only does so when it is very confident.
+
+#### 2. Recall = 0.4584 (45.84%)
+
+-   Recall measures how many of the actual $Y = 1$ cases were correctly
+    identified by the classifier.\
+-   A recall of 45.84% means that more than half of the true $Y = 1$
+    cases were missed, being classified as $Y = 0$ instead.\
+-   This is a direct consequence of the conservative nature of the Bayes
+    classifier, which only predicts $Y = 1$ when $X > 1$.\
+-   Since true $Y = 1$ values exist in the overlapping range
+    $X \in [-1,1]$, they are misclassified as $Y = 0$, leading to a high
+    number of false negatives ($FN = 267$).
+
+#### 3. F1-score = 0.6287 (62.87%)
+
+-   The F1-score is the harmonic mean of precision and recall, balancing
+    both metrics.\
+-   A score of 62.87% reflects a trade-off between the perfect precision
+    (which avoids false positives) and the relatively low recall (which
+    misses many true positives).\
+-   The moderate F1-score suggests that while the classifier is highly
+    conservative, it sacrifices recall significantly.
+
+```{r}
+# Load required library
+library(pROC)
+
+# Compute ROC and AUC
+roc_curve <- roc(data$y, data$y_pred)
+auc_value <- auc(roc_curve)
+
+# Plot ROC Curve
+plot(roc_curve, col = "blue", lwd = 2, main = "ROC Curve - Bayes Classifier",
+     xlab = "False Positive Rate (1 - Specificity)", ylab = "True Positive Rate (Sensitivity)")
+
+# Add reference line for random guessing
+abline(a = 0, b = 1, lty = 2, col = "red")  
+
+# Add legend
+legend("bottomright", legend = c("Bayes Classifier", "Random Guessing"),
+       col = c("blue", "red"), lty = c(1, 2), lwd = c(2, 2), bty = "n")
+
+# Print AUC
+cat("\nArea Under the Curve (AUC): ", round(auc_value, 4), "\n")
+
+
+
+
+```
+
+### ROC Curve Analysis for the Bayes Classifier
+
+The ROC curve illustrates the trade-off between **sensitivity** (True
+Positive Rate, TPR) and **false positive rate** (FPR) for the Bayes
+classifier. The classifier's ability to distinguish between the two
+classes is evaluated based on this curve, where an ideal classifier
+would approach the upper-left corner of the plot.
+
+------------------------------------------------------------------------
+
+### Interpretation of the ROC Curve
+
+-   The **blue line** represents the performance of the Bayes
+    classifier.\
+-   The **gray diagonal** represents a random classifier, serving as a
+    baseline.\
+-   The **red dashed line** corresponds to a completely random
+    classifier with no predictive power.
+
+The **x-axis** represents the **false positive rate (FPR)**, given by:
+
+$$
+FPR = \frac{FP}{FP + TN} = 1 - \text{Specificity}
+$$
+
+where $FP$ (false positives) are negative cases incorrectly predicted as
+positive, and $TN$ (true negatives) are correctly predicted negative
+cases.
+
+The **y-axis** represents the **true positive rate (TPR)** or
+**sensitivity**, defined as:
+
+$$
+TPR = \frac{TP}{TP + FN}
+$$
+
+where $TP$ (true positives) are correctly classified positive cases, and
+$FN$ (false negatives) are actual positives misclassified as negatives.
+
+The **initial segment of the curve remains at the bottom-left corner**,
+indicating that the classifier is highly conservative—it rarely predicts
+$Y = 1$, leading to a low sensitivity at the beginning. As the threshold
+shifts, the sensitivity increases rapidly, reflecting that once the
+classifier starts predicting $Y = 1$, it correctly identifies more true
+positives. However, its initial reluctance results in a significant
+number of **false negatives**.
+
+
+------------------------------------------------------------------------
+
+### Area Under the Curve (AUC)
+
+The **Area Under the Curve (AUC)** quantifies the overall performance of
+the classifier. AUC values range from **0 to 1**:
+
+-   $AUC = 1$: Perfect classification.\
+-   $AUC = 0.5$: Performance equivalent to random guessing.\
+-   $AUC < 0.5$: Worse than random guessing (a classifier performing in
+    the opposite direction).
+
+Given the shape of the ROC curve, the **AUC is moderate**, suggesting
+that while the classifier achieves **high specificity**, it suffers from
+**low recall** due to its conservative nature.
+
+The classifier excels in **avoiding false positives** but fails to
+capture a significant number of **true positives**, making it **highly
+precise but limited in recall**.
+
+------------------------------------------------------------------------
+
+## 2.3 Data-Driven Classifier
 
 Here, we consider a comparison between the Bayes classifier and the
 Logistic regression classifier.
@@ -226,8 +438,6 @@ made by assigning $Y = 1$ if $\mathbb{P}(Y = 1 | X) > 0.5$ and $Y = 0$
 otherwise. Logistic regression assumes a linear relationship between the
 features and the log-odds, independent observations, and no
 multicollinearity.
-
-
 
 ```{r}
 set.seed(54)
@@ -255,7 +465,9 @@ cat("Test Accuracy of Logistic Regression: ", test_accuracy, "%\n")
 
 
 ```
+
 Now, we evaluate the Bayes classifier on the test set:
+
 ```{r}
 # Apply the Bayes classifier on the test set
 test_data$bayes_pred <- bayes_classifier(test_data$x)  # Function must be defined in 'Functions.R'
@@ -268,9 +480,14 @@ cat("Test Accuracy of Bayes Classifier:", bayes_accuracy, "%\n")
 cat("Test Accuracy of Logistic Regression:", accuracy, "%\n")
 
 ```
-The accuracy results (75.4% for the Bayes classifier and 73.3% for the logistic regression model) highlight the performance gap between a theoretical and a practical classifier.
 
-The Bayes classifier achieves slightly higher accuracy as it directly leverages the true underlying data-generating process, serving as the optimal benchmark for classification in this setup. In contrast, logistic regression estimates the decision boundary from the data, introducing variability and a minor performance drop due to practical challenges in model estimation and potential misalignment with the true data distribution.
+The Bayes classifier achieves slightly higher accuracy as it directly
+leverages the true underlying data-generating process, serving as the
+optimal benchmark for classification in this setup. In contrast,
+logistic regression estimates the decision boundary from the data,
+introducing variability and a minor performance drop due to practical
+challenges in model estimation and potential misalignment with the true
+data distribution. However, accuracy is not the only performance metric and we will further explore the comparison between the two classifiers.
 
 ```{r}
 # We define a sequence of x values to generate predictions over a smooth range,
@@ -308,7 +525,7 @@ lines(x_seq, logistic_prob, col = "purple", lwd = 3, lty = 2)
 # - The Bayes Regression Function represents the optimal probability function.
 # - The Logistic Regression Estimate shows the model's learned probabilities.
 legend('bottomright', 
-       legend = c("Y = 0", "Y = 1", "Bayes Regression Function", "Logistic Regression Estimate"),
+       legend = c("Y = 0", "Y = 1", "Bayes Regression Function", "Logistic Regression Function"),
        col = c("darkblue", "darkred", "darkgreen", "purple"), 
        lty = c(NA, NA, 1, 2), 
        pch = c(16, 16, NA, NA), 
@@ -320,19 +537,140 @@ legend('bottomright',
 
 ```
 
-The Bayes function represents the **optimal classifier**, showing the true probability \( P(Y = 1 \mid X) \) with a **stepwise shape**, reflecting an abrupt decision boundary. In contrast, logistic regression estimates probabilities using a **smooth, sigmoidal function**, making it a practical but imperfect approximation. The dataset shows a **clear separation** between classes, making classification straightforward. While the Bayes function is **ideal but unknown**, logistic regression is **robust** and generalizes well, though it may struggle with sharp decision boundaries. This highlights the trade-off between **theoretical optimality and practical modeling**, as logistic regression smooths transitions that might be abrupt in reality.
+The Bayes function represents the **optimal classifier**, showing the
+true probability $P(Y = 1 \mid X)$ with a **stepwise shape**, reflecting
+an abrupt decision boundary. In contrast, logistic regression estimates
+probabilities using a **smooth, sigmoidal function**, making it a
+practical but imperfect approximation. The dataset shows a **clear
+separation** between classes, making classification straightforward.
+While the Bayes function is **ideal but unknown**, logistic regression
+is **robust** and generalizes well, though it may struggle with sharp
+decision boundaries. This highlights the trade-off between **theoretical
+optimality and practical modeling**, as logistic regression smooths
+transitions that might be abrupt in reality.
+
+## Performance Analysis of the Logistic Regression Classifier  
+
+Logistic regression provides a **data-driven approach** to classification by estimating the decision boundary directly from the training data. Unlike the Bayes classifier, which uses **true conditional distributions**, logistic regression models the probability \( P(Y = 1 \mid X) \) using a **sigmoid function**, making it a more flexible but approximate solution.
+
+---
+
+### 1. Evaluation Metrics  
+
+To compare the classifiers beyond accuracy, we compute the **precision, recall, and F1-score** for logistic regression.
+
+```{r}
+# Compute Confusion Matrix for Logistic Regression
+table_logistic <- table(Predicted = test_data$y_pred, Actual = test_data$y)
+
+# Extract elements from confusion matrix
+TP_log <- table_logistic[2,2]
+TN_log <- table_logistic[1,1]
+FP_log <- table_logistic[2,1]
+FN_log <- table_logistic[1,2]
+
+# Compute Precision, Recall, and F1-score
+precision_log <- TP_log / (TP_log + FP_log)
+recall_log <- TP_log / (TP_log + FN_log)
+f1_score_log <- 2 * (precision_log * recall_log) / (precision_log + recall_log)
+
+# Print results
+cat("\nLogistic Regression Performance Metrics:\n")
+cat("Precision: ", round(precision_log, 4), "\n")
+cat("Recall: ", round(recall_log, 4), "\n")
+cat("F1-score: ", round(f1_score_log, 4), "\n")
+
+# Print Confusion Matrix
+cat("\nConfusion Matrix for Logistic Regression:\n")
+print(table_logistic)
+
+# Extract elements from the confusion matrix
+TP <- table_bayes[2,2]
+TN <- table_bayes[1,1]
+FP <- table_bayes[2,1]
+FN <- table_bayes[1,2]
+
+
+cat("\nBayes Classifier Performance Metrics:\n")
+# Compute Precision, Recall, and F1-score
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Print Results
+cat("\nPrecision: ", round(precision, 4), "\n")
+cat("Recall: ", round(recall, 4), "\n")
+cat("F1-score: ", round(f1_score, 4), "\n")
+
+table_bayes <- table(Predicted = data$y_pred, Actual = data$y)
+
+# Print Results
+cat("Bayes Classifier Confusion Matrix:\n")
+cat("\nConfusion Matrix:\n")
+print(table_bayes)
+
+```
+```{r}
+# Compute ROC and AUC for Logistic Regression
+roc_curve_logistic <- roc(test_data$y, test_data$y_prob)
+auc_logistic <- auc(roc_curve_logistic)
+# Compute ROC and AUC for Bayes Classifier
+roc_curve_bayes <- roc(test_data$y, test_data$bayes_pred)
+auc_bayes <- auc(roc_curve_bayes)
+
+# Plot ROC Curve
+plot(roc_curve_logistic, col = "purple", lwd = 2, main = "ROC Curves: Logistic Regression vs. Bayes",
+     xlab = "False Positive Rate (1 - Specificity)", ylab = "True Positive Rate (Sensitivity)")
+lines(roc_curve_bayes, col = "blue", lwd = 2)
+abline(a = 0, b = 1, lty = 2, col = "red")  # Reference Line
+
+# Add legend
+legend("bottomright", legend = c("Logistic Regression", "Bayes Classifier", "Random Guessing"),
+       col = c("purple", "blue", "red"), lty = c(1, 1, 2), lwd = c(2, 2, 2), bty = "n")
+
+# Print AUC values
+cat("\nArea Under the Curve (AUC) - Logistic Regression: ", round(auc_logistic, 4), "\n")
+cat("Area Under the Curve (AUC) - Bayes Classifier: ", round(auc_bayes, 4), "\n")
+
+```
+### Performance Comparison  
+
+Logistic regression achieves a precision of 0.7719, meaning that approximately 77% of the observations predicted as \( Y = 1 \) are correctly classified. In contrast, the Bayes classifier has a perfect precision of 1.0, indicating that it never incorrectly predicts \( Y = 1 \). This occurs because the Bayes classifier is highly conservative, only predicting \( Y = 1 \) when it is certain, completely avoiding false positives.  
+
+Recall is significantly higher for logistic regression at 0.7184 compared to 0.4584 for the Bayes classifier. This suggests that logistic regression captures a larger proportion of true \( Y = 1 \) cases, whereas the Bayes classifier frequently misclassifies them as \( Y = 0 \), leading to a high number of false negatives.  
+
+The F1-score, which balances precision and recall, is 0.7442 for logistic regression, whereas the Bayes classifier achieves 0.6287. The lower F1-score of the Bayes classifier is a direct result of its low recall, despite having perfect precision. Logistic regression, by maintaining a better balance between precision and recall, achieves a more effective overall performance.  
+
+Examining the confusion matrices, the Bayes classifier results in **507 true negatives, 267 false negatives, 0 false positives, and 226 true positives**. The complete absence of false positives explains its perfect precision. However, the 267 false negatives highlight its conservative nature, as it avoids predicting \( Y = 1 \) unless highly certain. Logistic regression produces **203 true negatives, 69 false negatives, 52 false positives, and 176 true positives**. While it has more false positives than the Bayes classifier, it compensates with significantly fewer false negatives, improving its recall.  
+
+The test accuracy of the Bayes classifier is **75.4%**, slightly higher than the **73.3%** accuracy of logistic regression. While this suggests that the Bayes classifier minimizes overall misclassification slightly better, accuracy alone does not capture the trade-offs between false positives and false negatives.  
+
+The ROC curve further demonstrates the differences between the classifiers. The curve for logistic regression consistently stays above that of the Bayes classifier, indicating better sensitivity across different classification thresholds. The area under the curve (AUC) for logistic regression is **0.8758**, significantly higher than the Bayes classifier’s **0.749**, confirming that logistic regression has a stronger ability to differentiate between the two classes.  
+
+Overall, the Bayes classifier adopts a conservative strategy, ensuring no false positives but suffering from a high number of false negatives. Logistic regression, being more flexible, finds a better balance between false positives and false negatives. Given its superior AUC and recall, logistic regression provides a more effective classification performance in this context, despite the Bayes classifier achieving a marginally higher accuracy.
+
 
 ## 3. Repeated Sampling
 
-In this section, we conduct a repeated sampling experiment to compare the performance of the Bayes classifier and logistic regression. Specifically, we simulate $M = 10,000$ datasets, each consisting of a training set with \( n = 1,000 \) observations and a test set with $m = 500$ observations, drawn from the specified data-generating process.  
+In this section, we conduct a repeated sampling experiment to compare
+the performance of the Bayes classifier and logistic regression.
+Specifically, we simulate $M = 10,000$ datasets, each consisting of a
+training set with $n = 1,000$ observations and a test set with $m = 500$
+observations, drawn from the specified data-generating process.
 
-For each simulated dataset:  
+For each simulated dataset:
 
-1. **The Bayes classifier** is applied to the test set, and its accuracy is recorded. This serves as the theoretical benchmark since it directly utilizes the known underlying distributions.  
+1.  **The Bayes classifier** is applied to the test set, and its
+    accuracy is recorded. This serves as the theoretical benchmark since
+    it directly utilizes the known underlying distributions.
 
-2. **Logistic regression** is trained on the training set and evaluated on the test set. The accuracy of its predictions on the test set is recorded, representing the practical performance of a data-driven classifier.  
+2.  **Logistic regression** is trained on the training set and evaluated
+    on the test set. The accuracy of its predictions on the test set is
+    recorded, representing the practical performance of a data-driven
+    classifier.
 
-After $M$ repetitions, we compute the mean and standard deviation of the accuracies for both classifiers to assess their overall performance.  
+After $M$ repetitions, we compute the mean and standard deviation of the
+accuracies for both classifiers to assess their overall performance.
 
 ```{r, echo=TRUE}
 set.seed(78)  # Ensure reproducibility
@@ -370,26 +708,39 @@ cat("Average Accuracy over", M, "iterations:\n")
 cat("Bayes Classifier:", bayes_mean_acc, "%\n")
 cat("Logistic Regression:", logistic_mean_acc, "%\n")
 
-# Compare Performance
-if (bayes_mean_acc > logistic_mean_acc) {
-  cat("Bayes Classifier performs better on average.\n")
-} else if (logistic_mean_acc > bayes_mean_acc) {
-  cat("Logistic Regression performs better on average.\n")
-} else {
-  cat("Both classifiers perform equally well on average.\n")
-}
 
 
 
 
 ```
-The results of the repeated sampling experiment indicate that logistic regression marginally outperforms the Bayes classifier. The **Bayes classifier** achieves a mean accuracy of approximately 75.03%, while **logistic regression** attains a slightly higher mean accuracy of 75.04%.  
 
-At first glance, this slight advantage for logistic regression may seem unexpected, given that the Bayes classifier is theoretically optimal under the assumption of a perfectly known data-generating process. However, this result highlights an important practical consideration: while the Bayes classifier relies entirely on the assumed distributions of $X \mid Y$, logistic regression learns the decision boundary directly from the data. This flexibility allows logistic regression to adapt to small variations or noise in the simulated datasets that may not perfectly conform to the theoretical assumptions.  
+The results of the repeated sampling experiment indicate that logistic
+regression marginally outperforms the Bayes classifier. The **Bayes
+classifier** achieves a mean accuracy of approximately 75.03%, while
+**logistic regression** attains a slightly higher mean accuracy of
+75.04%.
 
-Additionally, the data-driven nature of logistic regression enables it to generalize effectively, even in cases where the underlying distributions are subject to slight deviations. This adaptability gives logistic regression a practical advantage in real-world applications, where the true data distribution is often unknown or imperfectly specified.  
+At first glance, this slight advantage for logistic regression may seem
+unexpected, given that the Bayes classifier is theoretically optimal
+under the assumption of a perfectly known data-generating process.
+However, this result highlights an important practical consideration:
+while the Bayes classifier relies entirely on the assumed distributions
+of $X \mid Y$, logistic regression learns the decision boundary directly
+from the data. This flexibility allows logistic regression to adapt to
+small variations or noise in the simulated datasets that may not
+perfectly conform to the theoretical assumptions.
 
-Overall, these findings reinforce the robustness of logistic regression as a versatile classifier, capable of performing on par with or even slightly surpassing theoretical benchmarks like the Bayes classifier in applied settings.  
+Additionally, the data-driven nature of logistic regression enables it
+to generalize effectively, even in cases where the underlying
+distributions are subject to slight deviations. This adaptability gives
+logistic regression a practical advantage in real-world applications,
+where the true data distribution is often unknown or imperfectly
+specified.
+
+Overall, these findings reinforce the robustness of logistic regression
+as a versatile classifier, capable of performing on par with or even
+slightly surpassing theoretical benchmarks like the Bayes classifier in
+applied settings.
 
 # Part 2
 
@@ -486,6 +837,4 @@ method generates univariate scores from the classifier, these tests are
 perfectly suited to evaluate those scores, ensuring they align well with
 the problem at hand.
 
-```{r}
 
-```
