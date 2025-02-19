@@ -1,0 +1,2079 @@
+---
+title: "Homework-SDS"
+author: "Andrea De Vincenzo, Domenico Azzarito and Michele Pezza"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    css: styles.css
+  pdf_document: default
+fontsize: 12pt
+geometry: margin=1in 1in 1in 1in
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r include-functions}
+# Load required libraries (if not already loaded)
+library(randomForest)
+library(pROC)
+library(MASS)    # For mvrnorm (used in generate_data)
+library(plotly)  # For interactive plots
+library(rpart)
+library(corrplot)
+library(caret)
+library(foreach)
+library(doParallel)
+
+# Load custom module
+source("module/Module_1.R")
+source("module/Module_2.R")
+source("module/Module_3.R")
+```
+
+# Part 1
+
+In this part, we work on deriving and understanding the Bayes
+classification rule, denoted as $\eta^*(x)$, in a simple binary
+classification scenario. The goal of this rule is to minimize
+classification errors by assigning each observation to the class with
+the higher posterior probability.
+
+Here, we assume $Y \in \{0, 1\}$ is a binary outcome, and
+$X \in \mathbb{R}$ is a continuous feature. The conditional
+distributions of $X$ given $Y$ are defined as uniform distributions, and
+both classes have equal prior probabilities. Using this setup, we derive
+the regression function $r(x)$, which gives the conditional probability
+$\mathbb{P}(Y=1 \mid X=x)$, and use it to define the decision rule.
+
+In this section, we break down the steps to calculate $\eta^*(x)$ by
+comparing the conditional densities $f_0(x)$ and $f_1(x)$ for the two
+classes. This leads to a clear definition of the decision boundary,
+showing how the optimal rule can be applied to classify observations
+based on their feature values.
+
+## 1. Bayes classification rule $\eta^{*}(x)$
+
+$(Y,X)$ are random variables with $Y \in \{0,1\}$ and
+$X \in \mathbb{R}$. Suppose that
+
+$$
+(X \mid Y = 0) \sim \text{Unif}(-3, 1) \quad \text{and} \quad (X \mid Y = 1) \sim \text{Unif}(-1, 3)
+$$
+
+Further suppose that
+$\mathbb{P}(Y = 0) = \mathbb{P}(Y = 1) = \frac{1}{2}$.
+
+------------------------------------------------------------------------
+
+The regression function is defined as follows: $$
+r(x) = \mathbb{E}(Y \mid X = x) = \mathbb{P}(Y=1 \mid X = x) = \dfrac{\pi_1f_1(x)}{\pi_1f_1(x) + (1-\pi_1)f_0(x)}
+$$
+
+where
+$\pi_1 = \mathbb{P}(Y = 1), f_1(x) = f(x \mid Y = 1) \text{ and }  f_0(x) = f(x \mid Y = 0)$.
+
+------------------------------------------------------------------------
+
+The Bayes classification rule $\eta^{*}(x)$ is defined as:
+
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if } \mathbb{P}(Y = 1 | X = x) > \mathbb{P}(Y = 0 | X = x) \\
+0 & \text{otherwise}
+\end{cases} = \begin{cases}
+1 & \text{if } \pi_1f_1(x) > (1-\pi_1)f_0(x) \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+Since we have $\pi_1 = \pi_0 = \frac{1}{2}$: $$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if } f_1(x) > f_0(x) \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+------------------------------------------------------------------------
+
+In our setup: $$
+f_1(x) = 
+\begin{cases} 
+\frac{1}{4} & \text{if } -1 \leq x \leq 3 \\
+0 & \text{otherwise}
+\end{cases} 
+\quad \text{and} \quad f_0(x) = 
+\begin{cases} 
+\frac{1}{4} & \text{if } -3 \leq x \leq 1 \\
+0 & \text{otherwise}
+\end{cases} 
+$$
+
+------------------------------------------------------------------------
+
+-   $x < -3$: $$
+    f_1(x) = 0, \; f_0(x) = 0 \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+    $$
+-   $-3 \leq x < -1$: $$
+    f_1(x) = 0, \; f_0(x) = \frac{1}{4} \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+    $$
+-   $-1 \leq x \leq 1$: $$
+    f_1(x) = \frac{1}{4}, \; f_0(x) = \frac{1}{4} \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0 
+    $$
+-   $1 < x \leq 3$: $$
+    f_1(x) = \frac{1}{4}, \; f_0(x) = 0 \Rightarrow f_1(x) > f_0(x) \Rightarrow \eta^{*}(x) = 1 
+    $$
+-   $x > 3$: $$
+    f_1(x) = 0, \; f_0(x) = 0 \Rightarrow f_1(x) \not> f_0(x) \Rightarrow \eta^{*}(x) = 0
+    $$
+
+Hence, here the Bayes classification rule $\eta^{*}(x)$ is:
+
+$$
+\eta^*(x) = 
+\begin{cases} 
+1 & \text{if} \quad 1 < x \leq 3 \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+## 2.1
+
+Now, we generate a dataset of size $n = 1000$ from the joint data model
+$p(y, x) = p(x | y) \cdot p(y)$ described earlier. The data will include
+samples drawn from the specified uniform distributions for $X$
+conditioned on $Y$. We will then visualize the generated dataset.
+
+```{r point 1.2}
+set.seed(54) # We begin with setting the seed for reproducibility
+n <- 1000 # Sample size 
+# Define the distribution
+
+# We simulate one dataset
+data <- simulate(n)  # defined in 'Functions.R'
+
+# Plot the data
+plot(data$x, data$y, 
+     col = ifelse(data$y == 1, adjustcolor("darkred", alpha.f = 0.1), 
+                                  adjustcolor("darkblue", alpha.f = 0.1)), 
+     pch = 16, cex = 0.7, xlab = "X", ylab = "Y", 
+     main = "Generated dataset and Regression function", 
+     sub = expression(eta(x) == 1 ~ "if and only if" ~ r(x) > 0.5))
+
+# Plot the Regression Function r(x)
+x_seq <- seq(-3, 3, length.out = 1000)
+r_values <- reg_fun(x_seq)   # 
+
+lines(x_seq, r_values, type = 's', 
+      col = adjustcolor("darkgreen", alpha.f = 0.4), 
+      lwd = 3) 
+
+# Add the regression function threshold
+abline(h = 0.5, lty = 3, lwd =2)
+
+# Add Legend
+legend("topleft", legend = c("Y = 0", "Y = 1", "r(x)",'threshold'), 
+       col = c('darkblue','darkred','darkgreen','black'), lty = c(0, 0, 1,3), 
+       pch = c(16, 16, NA,NA), pt.cex = c(0.7, 0.7, NA,NA), lwd = c(NA, NA, 2,2))
+```
+
+This visualization shows the generated dataset and the regression
+function $r(x)$ used to model the probability of $Y = 1$. The blue
+points represent observations where the outcome is 0, and the red points
+represent observations where the outcome is 1. The green stepwise line
+represents the regression function $r(x)$, which models the posterior
+probability $\mathbb{P}(Y = 1 | X = x)$ based on the underlying
+distributions defined for $X$ given $Y$. The stepwise nature of the
+function reflects how probabilities change sharply at the boundaries,
+consistent with the uniform distributions specified in the data
+generation process. The dotted black horizontal line at $r(x) = 0.5$
+acts as a classification threshold. According to the Bayes classifier,
+$\eta(x) = 1$ if and only if $r(x) > 0.5$. This decision rule splits the
+feature space into two regions: predicted as $Y = 0$ where
+$r(x) \leq 0.5$ and predicted as $Y = 1$ where $r(x) > 0.5$.
+
+## 2.2
+
+Now, we focus on the evaluation of the Bayes classifier.
+
+```{r point 1.3}
+# We evaluate its performance
+
+# Predict using the Bayes classifier
+data$y_pred <- bayes_classifier(data$x)     # function defined in 'Functions.R'
+
+accuracy <- mean(data$y == data$y_pred) * 100
+cat("Accuracy of Bayes Classifier: ", accuracy, "%\n",sep = '')
+
+```
+
+```{r}
+cat("Size of Y = 0: ", sum(data$y == 0), "\n")
+cat("Size of Y = 1: ", sum(data$y == 1), "\n")
+
+```
+
+Since the dataset is highly balanced, Accuracy is a reasonable metric
+for evaluating the performance of the classifier.
+
+An accuracy of 73.3% for the Bayes classifier means that **73.3% of all
+predictions match the true class labels** in the dataset. This value
+reflects the proportion of correctly classified instances out of the
+total number of observations.
+
+Since the Bayes classifier is theoretically optimal under the assumed
+probability distributions, this accuracy represents the best possible
+performance given the uniform distributions of $X \mid Y$. However, this
+does not imply perfect classification. The classifier minimizes the
+overall error rate but does so by prioritizing specificity, which
+results in a high number of **false negatives** while avoiding **false
+positives** entirely.
+
+Thus, while 73.3% accuracy indicates strong performance, it must be
+interpreted alongside other metrics, such as recall and precision, to
+fully understand its classification behavior.
+
+```{r}
+# Compute Confusion Matrix
+table_bayes <- table(Predicted = data$y_pred, Actual = data$y)
+
+# Print Results
+cat("Bayes Classifier Performance Metrics:\n")
+cat("\nConfusion Matrix:\n")
+print(table_bayes)
+
+```
+
+The misclassification pattern observed in the Bayes classifier stems
+directly from the probabilistic properties of the data-generating
+process. The conditional distributions of $X$ given $Y$ are defined as:
+
+$$
+(X \mid Y = 0) \sim \text{Unif}(-3,1), \quad (X \mid Y = 1) \sim \text{Unif}(-1,3)
+$$
+
+Both distributions are uniform over their respective intervals. Since
+the Bayes classifier assigns $Y = 1$ when the posterior probability
+$P(Y = 1 \mid X)$ exceeds $0.5$, the decision boundary is determined by:
+
+$$
+P(Y = 1 \mid X) = \frac{\pi_1 f_1(X)}{\pi_1 f_1(X) + \pi_0 f_0(X)}
+$$
+
+where $\pi_1 = P(Y = 1)$ and $\pi_0 = P(Y = 0)$ are the class priors,
+both equal to $0.5$. Given that both conditional densities are uniform,
+the decision threshold occurs at $X = 1$. This implies:
+
+-   **For** $X > 1$, the classifier predicts $Y = 1$, as
+    $P(Y = 1 \mid X) > 0.5$.\
+-   **For** $X \leq 1$, the classifier predicts $Y = 0$, as
+    $P(Y = 0 \mid X) \geq P(Y = 1 \mid X)$.
+
+### Misclassification Analysis
+
+The overlap between the two conditional distributions exists in the
+range $[-1,1]$. Within this region, both classes have nonzero
+probability, but the Bayes classifier **always predicts** $Y = 0$, as
+the posterior probability favors class $Y = 0$. This leads to
+**systematic misclassification of some** $Y = 1$ observations,
+contributing to a high false negative rate.
+
+### Confusion Matrix Breakdown
+
+-   **False Negatives (267 cases):**\
+    These occur because observations where $Y = 1$ and $X \in [-1,1]$
+    are incorrectly classified as $Y = 0$.\
+-   **True Positives (226 cases):**\
+    These correspond to instances where $Y = 1$ and $X > 1$, which are
+    correctly identified by the classifier. Given the uniform nature of
+    $X \mid Y = 1$, approximately half of the $Y = 1$ cases fall within
+    this range.\
+-   **No False Positives:**\
+    The classifier never predicts $Y = 1$ when the true label is
+    $Y = 0$, ensuring perfect specificity but reducing recall.
+
+```{r}
+# Extract elements from the confusion matrix
+TP <- table_bayes[2,2]
+TN <- table_bayes[1,1]
+FP <- table_bayes[2,1]
+FN <- table_bayes[1,2]
+
+# Compute Precision, Recall, and F1-score
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Print Results
+cat("\nPrecision: ", round(precision, 4), "\n")
+cat("Recall: ", round(recall, 4), "\n")
+cat("F1-score: ", round(f1_score, 4), "\n")
+
+
+```
+
+#### 1. Precision = 1 (100%)
+
+-   Precision is the proportion of correctly predicted positives
+    ($Y = 1$) out of all instances predicted as $Y = 1$.\
+-   A precision of 100% means that every time the classifier predicts
+    $Y = 1$, it is always correct.\
+-   This aligns with the confusion matrix, where there are zero false
+    positives ($FP = 0$)—the classifier never predicts $Y = 1$ when the
+    true class is $Y = 0$.\
+-   High precision indicates that the classifier is conservative in
+    assigning $Y = 1$ and only does so when it is very confident.
+
+#### 2. Recall = 0.4584 (45.84%)
+
+-   Recall measures how many of the actual $Y = 1$ cases were correctly
+    identified by the classifier.\
+-   A recall of 45.84% means that more than half of the true $Y = 1$
+    cases were missed, being classified as $Y = 0$ instead.\
+-   This is a direct consequence of the conservative nature of the Bayes
+    classifier, which only predicts $Y = 1$ when $X > 1$.\
+-   Since true $Y = 1$ values exist in the overlapping range
+    $X \in [-1,1]$, they are misclassified as $Y = 0$, leading to a high
+    number of false negatives ($FN = 267$).
+
+#### 3. F1-score = 0.6287 (62.87%)
+
+-   The F1-score is the harmonic mean of precision and recall, balancing
+    both metrics.\
+-   A score of 62.87% reflects a trade-off between the perfect precision
+    (which avoids false positives) and the relatively low recall (which
+    misses many true positives).\
+-   The moderate F1-score suggests that while the classifier is highly
+    conservative, it sacrifices recall significantly.
+
+```{r}
+# Compute ROC and AUC
+roc_curve <- roc(data$y, data$y_pred)
+auc_value <- auc(roc_curve)
+
+# Plot ROC Curve
+plot(roc_curve, col = "orange", lwd = 2, main = "ROC Curve - Bayes Classifier",
+     xlab = "False Positive Rate (1 - Specificity)", ylab = "True Positive Rate (Sensitivity)")
+
+# Add reference line for random guessing
+abline(a = 0, b = 1, lty = 2, col = "darkblue")  
+
+# Add legend
+legend("bottomright", legend = c("Bayes Classifier", "Random Guessing"),
+       col = c("orange", "darkblue"), lty = c(1, 2), lwd = c(2, 2), bty = "n")
+
+# Print AUC
+cat("\nArea Under the Curve (AUC): ", round(auc_value, 4), "\n")
+
+
+
+
+```
+
+### ROC Curve Analysis for the Bayes Classifier
+
+The ROC curve illustrates the trade-off between **sensitivity** (True
+Positive Rate, TPR) and **false positive rate** (FPR) for the Bayes
+classifier. The classifier's ability to distinguish between the two
+classes is evaluated based on this curve, where an ideal classifier
+would approach the upper-left corner of the plot.
+
+------------------------------------------------------------------------
+
+### Interpretation of the ROC Curve
+
+-   The **blue line** represents the performance of the Bayes
+    classifier.\
+-   The **gray diagonal** represents a random classifier, serving as a
+    baseline.\
+-   The **red dashed line** corresponds to a completely random
+    classifier with no predictive power.
+
+The **x-axis** represents the **false positive rate (FPR)**, given by:
+
+$$
+FPR = \frac{FP}{FP + TN} = 1 - \text{Specificity}
+$$
+
+where $FP$ (false positives) are negative cases incorrectly predicted as
+positive, and $TN$ (true negatives) are correctly predicted negative
+cases.
+
+The **y-axis** represents the **true positive rate (TPR)** or
+**sensitivity**, defined as:
+
+$$
+TPR = \frac{TP}{TP + FN}
+$$
+
+where $TP$ (true positives) are correctly classified positive cases, and
+$FN$ (false negatives) are actual positives misclassified as negatives.
+
+The **initial segment of the curve remains at the bottom-left corner**,
+indicating that the classifier is highly conservative—it rarely predicts
+$Y = 1$, leading to a low sensitivity at the beginning. As the threshold
+shifts, the sensitivity increases rapidly, reflecting that once the
+classifier starts predicting $Y = 1$, it correctly identifies more true
+positives. However, its initial reluctance results in a significant
+number of **false negatives**.
+
+------------------------------------------------------------------------
+
+### Area Under the Curve (AUC)
+
+The **Area Under the Curve (AUC)** quantifies the overall performance of
+the classifier. AUC values range from **0 to 1**:
+
+-   $AUC = 1$: Perfect classification.\
+-   $AUC = 0.5$: Performance equivalent to random guessing.\
+-   $AUC < 0.5$: Worse than random guessing (a classifier performing in
+    the opposite direction).
+
+Given the shape of the ROC curve, the **AUC is moderate**, suggesting
+that while the classifier achieves **high specificity**, it suffers from
+**low recall** due to its conservative nature.
+
+The classifier excels in **avoiding false positives** but fails to
+capture a significant number of **true positives**, making it **highly
+precise but limited in recall**.
+
+------------------------------------------------------------------------
+
+## 2.3 Data-Driven Classifier
+
+Here, we consider a comparison between the Bayes classifier and the
+Logistic regression classifier.
+
+Logistic regression is a supervised machine learning algorithm used for
+binary classification problems. It models the probability that an
+observation belongs to the positive class, $Y = 1$, given input
+features, $X_1, \ldots, X_p$. The probability is modeled using the
+logistic (sigmoid) function:
+
+$$
+\mathbb{P}(Y = 1 | X) = \frac{1}{1 + e^{-z}}
+$$
+
+where $z = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \dots + \beta_p X_p$ is
+a linear combination of input features, and $\beta$ are parameters
+estimated using Maximum Likelihood Estimation (MLE). Predictions are
+made by assigning $Y = 1$ if $\mathbb{P}(Y = 1 | X) > 0.5$ and $Y = 0$
+otherwise. Logistic regression assumes a linear relationship between the
+features and the log-odds, independent observations, and no
+multicollinearity.
+
+```{r}
+set.seed(54)
+
+# Train Set
+train_data <- data
+
+# Test Set
+m = 500
+test_data <- simulate(m)
+
+# Logistic Regression Model
+logistic_model <- glm(y ~ x, data = train_data, family = binomial)
+
+# We predict probabilities on the test dataset
+test_data$y_prob <- predict(logistic_model, newdata = test_data, type = "response")
+
+#  And convert those probabilities to binary predictions using a 0.5 threshold
+test_data$y_pred <- ifelse(test_data$y_prob > 0.5, 1, 0)
+
+# Compute accuracy
+test_accuracy <- mean(test_data$y == test_data$y_pred) * 100
+cat("Test Accuracy of Logistic Regression: ", test_accuracy, "%\n")
+
+
+
+```
+
+Now, we evaluate the Bayes classifier on the test set:
+
+```{r}
+# Apply the Bayes classifier on the test set
+test_data$bayes_pred <- bayes_classifier(test_data$x)  # Function must be defined in 'Functions.R'
+
+# Compute Accuracy for Bayes Classifier
+bayes_accuracy <- mean(test_data$y == test_data$bayes_pred) * 100
+cat("Test Accuracy of Bayes Classifier:", bayes_accuracy, "%\n")
+
+# Compare with Logistic Regression
+cat("Test Accuracy of Logistic Regression:", accuracy, "%\n")
+
+```
+
+The Bayes classifier achieves slightly higher accuracy as it directly
+leverages the true underlying data-generating process, serving as the
+optimal benchmark for classification in this setup. In contrast,
+logistic regression estimates the decision boundary from the data,
+introducing variability and a minor performance drop due to practical
+challenges in model estimation and potential misalignment with the true
+data distribution. However, accuracy is not the only performance metric
+and we will further explore the comparison between the two classifiers.
+
+```{r}
+# We define a sequence of x values to generate predictions over a smooth range,
+# ensuring a detailed representation of the regression function.
+x_seq <- seq(min(data$x), max(data$x), length.out = 1000)
+
+# We compute the predicted probabilities using our logistic regression model.
+# This allows us to visualize how the model estimates the probability of Y = 1 across the x-axis.
+logistic_prob <- predict(logistic_model, newdata = data.frame(x = x_seq), type = "response")
+
+# We plot the dataset, differentiating between the two classes.
+# Points corresponding to Y = 1 are shown in a semi-transparent dark red,
+# while points for Y = 0 are displayed in a semi-transparent dark blue.
+plot(data$x, data$y, 
+     col = ifelse(data$y == 1, adjustcolor("darkred", alpha.f = 0.1), 
+                                  adjustcolor("darkblue", alpha.f = 0.1)), 
+     pch = 16, cex = 0.7, xlab = "X", ylab = "Y", 
+     main = "Generated Dataset and Regression Function", 
+     sub = expression(eta(x) == 1 ~ "if and only if" ~ r(x) > 0.5))
+
+# We compute the Bayes regression function, which represents the theoretical 
+# optimal probability of Y = 1 given X. This function should be pre-defined in 'Functions.R'.
+r_values <- reg_fun(x_seq)
+
+# We overlay the Bayes regression function onto the plot using a step function.
+# This serves as the optimal decision boundary for classification.
+lines(x_seq, r_values, type = 's', col = adjustcolor("darkgreen", alpha.f = 0.6), lwd = 3) 
+
+# We add the estimated probabilities from the logistic regression model.
+# This allows us to compare our logistic model's estimated function against the Bayes optimal function.
+lines(x_seq, logistic_prob, col = "purple", lwd = 3, lty = 2)
+
+# We add a legend to clarify the different elements present in the plot.
+# - Y = 0 and Y = 1 represent the data points.
+# - The Bayes Regression Function represents the optimal probability function.
+# - The Logistic Regression Estimate shows the model's learned probabilities.
+legend('bottomright', 
+       legend = c("Y = 0", "Y = 1", "Bayes Regression Function", "Logistic Regression Function"),
+       col = c("darkblue", "darkred", "darkgreen", "purple"), 
+       lty = c(NA, NA, 1, 2), 
+       pch = c(16, 16, NA, NA), 
+       pt.cex = c(1.2, 1.2, NA, NA),  # We increase the point size for better visibility.
+       lwd = c(NA, NA, 3, 3),          # We ensure the regression function lines are clearly visible.
+       bty = "n")  # We remove the legend box for a cleaner aesthetic.
+
+
+
+```
+
+The Bayes function represents the **optimal classifier**, showing the
+true probability $P(Y = 1 \mid X)$ with a **stepwise shape**, reflecting
+an abrupt decision boundary. In contrast, logistic regression estimates
+probabilities using a **smooth, sigmoidal function**, making it a
+practical but imperfect approximation. The dataset shows a **clear
+separation** between classes, making classification straightforward.
+While the Bayes function is **ideal but unknown**, logistic regression
+is **robust** and generalizes well, though it may struggle with sharp
+decision boundaries. This highlights the trade-off between **theoretical
+optimality and practical modeling**, as logistic regression smooths
+transitions that might be abrupt in reality.
+
+## Performance Analysis of the Logistic Regression Classifier
+
+Logistic regression provides a **data-driven approach** to
+classification by estimating the decision boundary directly from the
+training data. Unlike the Bayes classifier, which uses **true
+conditional distributions**, logistic regression models the probability
+$P(Y = 1 \mid X)$ using a **sigmoid function**, making it a more
+flexible but approximate solution.
+
+------------------------------------------------------------------------
+
+### 1. Evaluation Metrics
+
+To compare the classifiers beyond accuracy, we compute the **precision,
+recall, and F1-score** for logistic regression.
+
+```{r}
+# Compute Confusion Matrix for Logistic Regression
+table_logistic <- table(Predicted = test_data$y_pred, Actual = test_data$y)
+
+# Extract elements from confusion matrix
+TP_log <- table_logistic[2,2]
+TN_log <- table_logistic[1,1]
+FP_log <- table_logistic[2,1]
+FN_log <- table_logistic[1,2]
+
+# Compute Precision, Recall, and F1-score
+precision_log <- TP_log / (TP_log + FP_log)
+recall_log <- TP_log / (TP_log + FN_log)
+f1_score_log <- 2 * (precision_log * recall_log) / (precision_log + recall_log)
+
+# Print results
+cat("\nLogistic Regression Performance Metrics:\n")
+cat("Precision: ", round(precision_log, 4), "\n")
+cat("Recall: ", round(recall_log, 4), "\n")
+cat("F1-score: ", round(f1_score_log, 4), "\n")
+
+# Print Confusion Matrix
+cat("\nConfusion Matrix for Logistic Regression:\n")
+print(table_logistic)
+
+# Extract elements from the confusion matrix
+TP <- table_bayes[2,2]
+TN <- table_bayes[1,1]
+FP <- table_bayes[2,1]
+FN <- table_bayes[1,2]
+
+
+cat("\nBayes Classifier Performance Metrics:\n")
+# Compute Precision, Recall, and F1-score
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Print Results
+cat("\nPrecision: ", round(precision, 4), "\n")
+cat("Recall: ", round(recall, 4), "\n")
+cat("F1-score: ", round(f1_score, 4), "\n")
+
+table_bayes <- table(Predicted = data$y_pred, Actual = data$y)
+
+# Print Results
+cat("Bayes Classifier Confusion Matrix:\n")
+cat("\nConfusion Matrix:\n")
+print(table_bayes)
+
+```
+
+```{r}
+# Compute ROC and AUC for Logistic Regression
+roc_curve_logistic <- roc(test_data$y, test_data$y_prob)
+auc_logistic <- auc(roc_curve_logistic)
+# Compute ROC and AUC for Bayes Classifier
+roc_curve_bayes <- roc(test_data$y, test_data$bayes_pred)
+auc_bayes <- auc(roc_curve_bayes)
+
+# Plot ROC Curve
+plot(roc_curve_logistic, col = "green", lwd = 2, main = "ROC Curves: Logistic Regression vs. Bayes",
+     xlab = "False Positive Rate (1 - Specificity)", ylab = "True Positive Rate (Sensitivity)")
+lines(roc_curve_bayes, col = "orange", lwd = 2)
+abline(a = 0, b = 1, lty = 2, col = "darkblue")  # Reference Line
+
+# Add legend
+legend("bottomright", legend = c("Logistic Regression", "Bayes Classifier", "Random Guessing"),
+       col = c("green", "orange", "darkblue"), lty = c(1, 1, 2), lwd = c(2, 2, 2), bty = "n")
+
+# Print AUC values
+cat("\nArea Under the Curve (AUC) - Logistic Regression: ", round(auc_logistic, 4), "\n")
+cat("Area Under the Curve (AUC) - Bayes Classifier: ", round(auc_bayes, 4), "\n")
+
+```
+
+### Performance Comparison
+
+Logistic regression achieves a precision of 0.7719, meaning that
+approximately 77% of the observations predicted as $Y = 1$ are correctly
+classified. In contrast, the Bayes classifier has a perfect precision of
+1.0, indicating that it never incorrectly predicts $Y = 1$. This occurs
+because the Bayes classifier is highly conservative, only predicting
+$Y = 1$ when it is certain, completely avoiding false positives.
+
+Recall is significantly higher for logistic regression at 0.7184
+compared to 0.4584 for the Bayes classifier. This suggests that logistic
+regression captures a larger proportion of true $Y = 1$ cases, whereas
+the Bayes classifier frequently misclassifies them as $Y = 0$, leading
+to a high number of false negatives.
+
+The F1-score, which balances precision and recall, is 0.7442 for
+logistic regression, whereas the Bayes classifier achieves 0.6287. The
+lower F1-score of the Bayes classifier is a direct result of its low
+recall, despite having perfect precision. Logistic regression, by
+maintaining a better balance between precision and recall, achieves a
+more effective overall performance.
+
+Examining the confusion matrices, the Bayes classifier results in **507
+true negatives, 267 false negatives, 0 false positives, and 226 true
+positives**. The complete absence of false positives explains its
+perfect precision. However, the 267 false negatives highlight its
+conservative nature, as it avoids predicting $Y = 1$ unless highly
+certain. Logistic regression produces **203 true negatives, 69 false
+negatives, 52 false positives, and 176 true positives**. While it has
+more false positives than the Bayes classifier, it compensates with
+significantly fewer false negatives, improving its recall.
+
+The test accuracy of the Bayes classifier is **75.4%**, slightly higher
+than the **73.3%** accuracy of logistic regression. While this suggests
+that the Bayes classifier minimizes overall misclassification slightly
+better, accuracy alone does not capture the trade-offs between false
+positives and false negatives.
+
+The ROC curve further demonstrates the differences between the
+classifiers. The curve for logistic regression consistently stays above
+that of the Bayes classifier, indicating better sensitivity across
+different classification thresholds. The area under the curve (AUC) for
+logistic regression is **0.8758**, significantly higher than the Bayes
+classifier’s **0.749**, confirming that logistic regression has a
+stronger ability to differentiate between the two classes.
+
+Overall, the Bayes classifier adopts a conservative strategy, ensuring
+no false positives but suffering from a high number of false negatives.
+Logistic regression, being more flexible, finds a better balance between
+false positives and false negatives. Given its superior AUC and recall,
+logistic regression provides a more effective classification performance
+in this context, despite the Bayes classifier achieving a marginally
+higher accuracy.
+
+## 3. Repeated Sampling
+
+Repeated sampling is a fundamental technique in statistical learning
+used to assess the generalization properties of a classifier by
+averaging its performance over multiple independent realizations of the
+data. The key distinction in this process lies in whether we evaluate
+**conditional risk**, which measures performance given a fixed training
+set, or **unconditional risk**, which accounts for variability in both
+training and test data.
+
+Consider a classification problem where data points $(X, Y)$ are drawn
+from an unknown joint distribution $P_{X,Y}$. Given a sample of size
+$n$:
+
+$$
+\mathcal{D}_n = \{(X_i, Y_i)\}_{i=1}^{n} \sim P_{X,Y}
+$$
+
+we train a classifier $\widehat{\eta}_n(\cdot)$, which maps features $X$
+to predicted labels $\widehat{Y}$. The classifier’s **true predictive
+risk** is given by:
+
+$$
+R(\widehat{\eta}_n) = \mathbb{E} \Big[ L(Y, \widehat{\eta}_n(X)) \Big]
+$$
+
+where $L(Y, \widehat{\eta}_n(X))$ is a loss function, typically the 0/1
+loss:
+
+$$
+L(Y, \widehat{\eta}_n(X)) = \mathbb{I}(Y \neq \widehat{\eta}_n(X))
+$$
+
+The expectation in $R(\widehat{\eta}_n)$ can be interpreted in two ways,
+leading to the distinction between conditional and unconditional risk.
+
+#### **Conditional vs. Unconditional Risk**
+
+The conditional risk is defined as:
+
+$$
+R_{\mathcal{D}_n}(\widehat{\eta}_n) = \mathbb{E} \Big[ L(Y, \widehat{\eta}_n(X)) \mid \mathcal{D}_n \Big]
+$$
+
+This measures the expected loss when the classifier
+$\widehat{\eta}_n(\cdot)$ is **fixed**, having been trained on a
+particular dataset $\mathcal{D}_n$. The expectation is taken only over
+new test data. In practice, this corresponds to training the classifier
+once and evaluating it multiple times on different test samples.
+
+In contrast, the unconditional risk is:
+
+$$
+R(\widehat{\eta}_n) = \mathbb{E} \Big[ L(Y, \widehat{\eta}_n(X)) \Big]
+$$
+
+where the expectation is taken over both the test data **and** the
+training data $\mathcal{D}_n$. This accounts for variability in the
+training process, reflecting the fact that different training sets yield
+different classifiers $\widehat{\eta}_n(\cdot)$. The unconditional risk
+is estimated by **repeatedly retraining the classifier on new datasets**
+and evaluating its performance across different training and test
+splits.
+
+#### **Repeated Sampling in Empirical Risk Estimation**
+
+To approximate the unconditional risk, we simulate multiple datasets
+$\mathcal{D}_n^{(1)}, \mathcal{D}_n^{(2)}, \dots, \mathcal{D}_n^{(M)}$,
+train a new classifier on each dataset, and evaluate its accuracy on an
+independent test set:
+
+$$
+R_n^{(j)}(\widehat{\eta}_n) = \frac{1}{m} \sum_{i=1}^{m} \mathbb{I} (Y_i^{(j)} \neq \widehat{\eta}_n^{(j)}(X_i^{(j)}))
+$$
+
+where $j$ indexes the repeated experiments. The Monte Carlo estimate of
+the unconditional risk is then:
+
+$$
+\hat{R}_M(\widehat{\eta}_n) = \frac{1}{M} \sum_{j=1}^{M} R_n^{(j)}(\widehat{\eta}_n)
+$$
+
+By the **Law of Large Numbers**, as $M \to \infty$, this estimate
+converges to the true unconditional risk:
+
+$$
+\hat{R}_M(\widehat{\eta}_n) \xrightarrow{\text{a.s.}} R(\widehat{\eta}_n)
+$$
+
+This approach explicitly accounts for the **stochastic nature of model
+training**, providing a more robust performance estimate than relying on
+a single training set.
+
+If the classifier is not data-driven (e.g., the Bayes classifier with
+known distributions), there is no need to retrain it, and the
+distinction between conditional and unconditional risk is irrelevant.
+However, for machine learning models that require parameter estimation,
+training variability plays a crucial role. Large sample sizes $n$
+generally stabilize the training process, reducing the discrepancy
+between conditional and unconditional risk.
+
+In practice, evaluating unconditional risk is computationally demanding,
+as it requires retraining the model multiple times. Instead, many
+real-world evaluations focus on conditional risk by training a
+classifier once and testing it on multiple test sets.
+
+Repeated sampling provides a principled method for approximating the
+expected risk of a classifier. The distinction between **conditional**
+and **unconditional** risk is fundamental: conditional risk reflects the
+classifier’s performance given a fixed training set, while unconditional
+risk incorporates the variability due to different training samples. The
+latter offers a more comprehensive understanding of a model’s expected
+performance but is more computationally intensive to estimate.
+Understanding this distinction is crucial for evaluating the robustness
+and generalization ability of classifiers in statistical learning.
+
+In this section, we conduct a repeated sampling experiment to compare
+the **generalization performance** of the Bayes classifier and logistic
+regression while keeping the training set fixed. This approach estimates
+the **conditional risk**, which measures the expected classification
+error given a fixed training dataset.
+
+Specifically, we simulate $M = 10,000$ test sets, each consisting of
+$m = 500$ new observations, while using a single training set of size
+$n = 1000$ drawn from the specified data-generating process.
+
+For each iteration:
+
+1.  **The Bayes classifier** is applied to the test set, and its
+    accuracy is recorded. Since the Bayes classifier is fully specified
+    by the known data distributions, it does not require retraining.
+
+2.  **Logistic regression** is trained once on the fixed training set
+    and evaluated on each new test set. Since the training data remains
+    constant, this isolates variability due to different test samples,
+    allowing us to assess the model’s ability to generalize.
+
+After $M$ repetitions, we compute the mean accuracy of both classifiers
+to estimate their **conditional risk**.
+
+```{r}
+set.seed(78)  # Ensure reproducibility
+
+# Simulation parameters
+M <- 10000  # Number of test sets
+n <- 1000   # Fixed training set size
+m <- 500    # Test set size
+
+# Store accuracy results
+bayes_accuracies <- numeric(M)
+logistic_accuracies <- numeric(M)
+
+# Generate a fixed training dataset
+train_data <- simulate(n)
+
+# Train logistic regression once on the fixed training set
+logistic_model <- glm(y ~ x, data = train_data, family = binomial)
+
+for (i in 1:M) {
+  # Generate a new test dataset
+  test_data <- simulate(m)
+  
+  # Bayes Classifier Predictions on test data
+  test_data$y_pred_bayes <- bayes_classifier(test_data$x)
+  bayes_accuracies[i] <- mean(test_data$y == test_data$y_pred_bayes)
+  
+  # Logistic Regression Predictions on test data (without retraining)
+  prob_pred <- predict(logistic_model, newdata = test_data, type = "response")
+  test_data$y_pred_logistic <- ifelse(prob_pred > 0.5, 1, 0)
+  logistic_accuracies[i] <- mean(test_data$y == test_data$y_pred_logistic)
+}
+
+# Compute mean accuracy over repeated test samples
+bayes_mean_acc <- mean(bayes_accuracies) * 100
+logistic_mean_acc <- mean(logistic_accuracies) * 100
+
+# Print results
+cat("Average Accuracy over", M, "test sets:\n")
+cat("Bayes Classifier:", bayes_mean_acc, "%\n")
+cat("Logistic Regression:", logistic_mean_acc, "%\n")
+
+
+
+
+
+```
+
+### **Repeated Sampling and Unconditional Risk Evaluation**
+
+To estimate **unconditional risk**, we perform a repeated sampling
+experiment where both the training and test datasets are independently
+generated in each iteration. The classifiers are evaluated **on the full
+dataset (training + test set combined)** to properly capture all sources
+of variability.
+
+We simulate $M = 10,000$ datasets, each consisting of: - A **training
+set** of size $n = 1000$. - A **test set** of size $m = 500$. - A
+**merged dataset** of size $n + m = 1500$ to estimate risk over the
+entire distribution.
+
+For each iteration:
+
+1.  **Train Logistic Regression** on a newly generated training set.\
+2.  **Evaluate the classifiers on the full dataset (training + test
+    combined).**\
+3.  **Record accuracy to estimate the expected risk.**
+
+After $M$ repetitions, we compute the mean accuracy over the full
+dataset to approximate the **unconditional risk**.
+
+```{r}
+set.seed(78)  # Ensure reproducibility
+
+# Simulation parameters
+M <- 10000  # Number of iterations
+n <- 1000   # Training set size
+m <- 500    # Test set size
+
+# Store accuracy results for full dataset (train + test combined)
+bayes_accuracies <- numeric(M)
+logistic_accuracies <- numeric(M)
+
+for (i in 1:M) {
+  # Generate a new training dataset
+  train_data <- simulate(n)
+  
+  # Train Logistic Regression on the new training dataset
+  logistic_model <- glm(y ~ x, data = train_data, family = binomial)
+  
+  # Generate a new test dataset
+  test_data <- simulate(m)
+  
+  # Merge training and test sets
+  full_data <- rbind(train_data, test_data)
+  
+  # Bayes Classifier Predictions on full dataset
+  full_data$y_pred_bayes <- bayes_classifier(full_data$x)
+  bayes_accuracies[i] <- mean(full_data$y == full_data$y_pred_bayes)
+  
+  # Logistic Regression Predictions on full dataset
+  prob_pred_full <- predict(logistic_model, newdata = full_data, type = "response")
+  full_data$y_pred_logistic <- ifelse(prob_pred_full > 0.5, 1, 0)
+  logistic_accuracies[i] <- mean(full_data$y == full_data$y_pred_logistic)
+}
+
+# Compute mean accuracy over full dataset
+bayes_mean_acc <- mean(bayes_accuracies) * 100
+logistic_mean_acc <- mean(logistic_accuracies) * 100
+
+# Print results
+cat("Average Accuracy over", M, "iterations (Full Dataset Evaluation):\n")
+cat("Bayes Classifier:", bayes_mean_acc, "%\n")
+cat("Logistic Regression:", logistic_mean_acc, "%\n")
+```
+
+The repeated sampling experiment provides insights into the
+generalization performance of both the Bayes classifier and logistic
+regression under two different evaluation frameworks: conditional risk
+estimation and unconditional risk estimation.
+
+### Conditional Risk Analysis (Fixed Training Set, Varying Test Sets)
+
+When estimating conditional risk, we kept the training set fixed and
+evaluated performance over 10,000 independently drawn test sets. The
+results indicate:
+
+-   **Bayes Classifier Accuracy:** 75.004%
+
+-   **Logistic Regression Accuracy:** 75.009%
+
+Since the training set remained unchanged, this experiment isolates the
+variability introduced by different test samples. The nearly identical
+mean accuracy of both classifiers suggests that, given a well-trained
+logistic regression model, its generalization error closely matches the
+theoretically optimal Bayes classifier. This highlights the
+effectiveness of logistic regression when the training set is
+sufficiently large and well-representative of the population.
+
+### Unconditional Risk Analysis (Varying Training and Test Sets)
+
+To estimate unconditional risk, we independently generated new training
+and test sets in each iteration and evaluated both classifiers on the
+full dataset (training + test combined). The results are:
+
+-   **Bayes Classifier Accuracy:** 75.021%
+
+-   **Logistic Regression Accuracy:** 75.057%
+
+Here, logistic regression slightly outperforms the Bayes classifier.
+This outcome reflects the impact of training set variability on logistic
+regression: by adjusting to different training samples, it can sometimes
+achieve marginal improvements over the theoretical Bayes classifier,
+which remains unchanged across iterations. This slight advantage likely
+stems from logistic regression’s ability to adaptively estimate decision
+boundaries, whereas the Bayes classifier follows a fixed, theoretically
+optimal decision rule that does not account for minor fluctuations in
+the empirical data distribution.
+
+**1.** Under conditional risk estimation, logistic regression
+generalizes almost identically to the Bayes classifier when trained on a
+sufficiently large dataset.
+
+**2.** Under unconditional risk estimation, logistic regression exhibits
+a small but consistent improvement, suggesting that retraining on new
+datasets can lead to a slight advantage due to better adaptation to
+empirical data variations.
+
+**3.** Theoretical optimality vs. empirical adaptiveness: The Bayes
+classifier is theoretically optimal given the true data distribution,
+but logistic regression benefits from statistical estimation in
+finite-sample settings, potentially surpassing the Bayes rule in
+practical implementations.
+
+**4.** The observed differences are minor, reinforcing that both
+classifiers perform similarly in this particular setup. However, in more
+complex scenarios with model misspecification, high-dimensional
+features, or non-uniform distributions, the performance gap could be
+more pronounced.
+
+In conclusion, repeated sampling highlights the importance of
+considering both conditional and unconditional risk in evaluating
+classifier performance. While logistic regression and the Bayes
+classifier perform nearly identically in this controlled setting, their
+relative advantages may differ in more complex real-world applications.
+
+# Part 2
+
+In this section, we aim to summarize and present the core methodology
+described by Jerome H. Friedman in his paper on multivariate
+goodness-of-fit and two-sample testing. Our approach is to distill the
+key steps into a clear and well-structured pseudo-code, providing a
+high-level overview of the testing procedure.
+
+We begin by outlining how to generate and process the datasets, followed
+by leveraging a binary classifier to assign scores that differentiate
+the two samples. These scores are then analyzed using univariate
+two-sample tests, such as Mann-Whitney or Kolmogorov-Smirnov, which act
+as baseline methods for assessing distributional differences. Finally,
+we describe how the null hypothesis is tested and interpreted to draw
+meaningful conclusions.
+
+Our goal is to highlight how machine learning techniques, particularly
+binary classifiers, can be effectively combined with traditional
+statistical methods to address complex multivariate testing problems.
+This pseudo-code is intended to serve as a guide for implementing the
+procedure in practice while ensuring clarity and precision.
+
+## Pseudo-code for Friedman's paper
+
+------------------------------------------------------------------------
+
+1.  Generate Datasets:
+    -   Start with two datasets:
+        -   Sample 1: $\{x_i\}$ with $N$ observations drawn from $p(x)$.
+        -   Sample 2: $\{z_i\}$ with $M$ observations drawn from $q(x)$.
+2.  Combine the Datasets:
+    -   Merge the two datasets into one:
+        -   $\{u_i\} = \{x_i\} \cup \{z_i\}$.
+    -   Assign labels to identify the origin of each observation:
+        -   Assign $y_i = 1$ for data points from Sample 1 ($\{x_i\}$).
+        -   Assign $y_i = -1$ for data points from Sample 2 ($\{z_i\}$).
+3.  Train a Binary Classifier:
+    -   Use a machine learning model (e.g. logistic regression) to
+        classify the combined data.
+    -   Input: The dataset $\{u_i\}$.
+    -   Output: Scores $\{s_i\}$ for each data point, where
+        $s_i = F(u_i)$ is the score assigned by the classifier.
+4.  Compute Scores for Each Sample:
+    -   Split the scores into two groups based on their original
+        datasets:
+        -   $S^+ = \{s_i \, \text{for all } x_i \, \text{(Sample 1)}\}$.
+        -   $S^- = \{s_i \, \text{for all } z_i \, \text{(Sample 2)}\}$.
+5.  Perform a Two-Sample Test:
+    -   Apply a univariate two-sample test (like Mann-Whitney or
+        Kolmogorov-Smirnov) on the scores:
+        -   Compute the test statistic: $t = T(S^+, S^-)$.
+6.  Test the Null Hypothesis:
+    -   Estimate the null distribution for the test statistic:
+        -   If different datasets are used for training and scoring:
+            -   Use the standard null distribution (e.g., for
+                Mann-Whitney or Kolmogorov-Smirnov).
+        -   If the same dataset is used for both training and scoring:
+            -   Use a permutation test to create the null distribution.
+    -   Compare the observed test statistic $t$ to the critical value
+        for a chosen significance level $\alpha$.
+    -   Reject the null hypothesis ($p = q$) if $t$ is greater than the
+        critical value.
+7.  Draw a Conclusion:
+    -   Based on the significance test, decide whether to reject or fail
+        to reject the null hypothesis.
+    -   If rejected, conclude that the two samples are likely drawn from
+        different distributions.
+
+------------------------------------------------------------------------
+
+Friedman suggests using the **Mann-Whitney** and **Kolmogorov-Smirnov**
+(KS) tests as baseline methods because they are simple, reliable, and
+effective for comparing two distributions. Both tests are **univariate**
+and **non-parametric**, which means they don’t rely on the data
+following a specific distribution. This makes them flexible and
+applicable in many different situations.
+
+The Mann-Whitney test is particularly helpful when we want to compare
+the central tendencies, such as the medians, of two groups. It works by
+ranking all the observations and comparing the ranks between the two
+samples, making it ideal for identifying whether the central values of
+the groups differ. In contrast, the KS test looks at the overall shape
+of the distributions by comparing their cumulative distribution
+functions (CDFs). This allows it to detect differences in not just
+central tendencies but also in spread, shape, or location, providing a
+broader perspective.
+
+These tests are great starting points because they are **easy to
+understand and implement**. They don’t require complicated calculations,
+and their **non-parametric nature** makes them adaptable to different
+types of data **without needing strict assumptions**. Since Friedman's
+method generates univariate scores from the classifier, these tests are
+perfectly suited to evaluate those scores, ensuring they align well with
+the problem at hand.
+
+## Distribution Considered
+
+The simulation study leverages a variety of data-generating
+distributions to mimic a range of realistic scenarios and to stress-test
+the robustness of the testing procedure. A **normal distribution** is
+used as the baseline since it is well-understood, symmetric, and widely
+applicable in many statistical contexts. The **uniform distribution**,
+characterized by an even spread within a bounded range, offers a
+contrasting scenario where outcomes are equally likely over an interval,
+challenging the method under less concentrated data. An **exponential
+distribution** is included to represent skewed data, common in contexts
+where events occur continuously and non-negatively, with a propensity
+for longer tails. Additionally, a **t-distribution**, with adjustable
+degrees of freedom, is used to model heavy-tailed data, effectively
+simulating situations with a higher likelihood of extreme values. This
+range of distributions ensures that the power analysis assesses the
+method's performance across a spectrum of conditions, from standard
+symmetric cases to those involving skewness and heavy tails, thereby
+providing a comprehensive evaluation of its effectiveness.
+
+## Using Generalized Linear Models (GLM) for Classification
+
+For classification, a generalized linear model (GLM) with a logistic
+regression framework is used. This model is well-suited for binary
+classification tasks, where the goal is to distinguish between two
+classes based on input features. In this setup, the GLM models the
+probability that a given observation belongs to one of the two
+categories by applying the logistic (sigmoid) function to a linear
+combination of the input features. The resulting probability scores can
+then be used to classify observations by assigning them to the class
+with the highest likelihood. Logistic regression is particularly
+effective because it provides interpretable coefficients, allowing us to
+understand how each feature influences the probability of belonging to a
+specific class. Additionally, since logistic regression outputs
+continuous probability scores rather than discrete labels, these scores
+can be used as input for statistical tests, such as the Mann-Whitney and
+Kolmogorov-Smirnov tests, to assess the separability between the two
+groups. This makes GLM-based logistic regression a natural choice for
+the classification step in this analysis.
+
+## Experimental Considerations and Hypotheses for Two-Sample Testing Procedures
+
+In these experiments, we aim to thoroughly evaluate the performance of
+our testing procedure by varying both the mean structures and the
+underlying distributions of the simulated data.
+
+### Experiment 1
+
+In Experiment 1, we deliberately set different means for the two classes
+along with distinct distribution, using an exponential distribution for
+one feature in class 0 and a uniform distribution for another, while
+class 1 employs a uniform and a normal distribution. This design tests
+the procedure’s ability to detect differences arising from both location
+shifts and distributional shapes. We hypothesize that as the sample size
+for class 1 increases, the power of the test will improve, allowing the
+classifier to more effectively discern the differences between the two
+classes.
+
+```{r bplot1}
+
+mean_0         = c(3, 0)
+mean_1         = c(4, 1)
+cov_matrix    = diag(2)
+dist_choice0  = c("exponential", "uniform")
+dist_choice1  = c("uniform", "normal")
+n0  = 10000
+n1  = 10000
+k = 2 # Number of features
+plot <- bivariate_density_plot(n0, n1, k, 
+                               mean_0, mean_1, 
+                               cov_matrix, 
+                               dist_choice0, dist_choice1)
+
+
+plot
+
+```
+
+```{r Experiment1}
+# Example parameters
+exp_name     <- "Experiment 1: Exponential-Uniform vs Uniform-Normal (Different Means & Distributions)"
+mean0        <- c(3, 0)           # Means for Class 0
+mean1        <- c(4, 1)       # Means for Class 1
+cov_matrix   <- diag(2)           # 2x2 Identity matrix for covariance
+dist_choice0  = c("exponential", "uniform")
+dist_choice1  = c("uniform", "normal") # Use normal distribution for both features in Class 1
+n0_fixed     <- 10000              # Fixed sample size for Class 0
+n1_values    <- ceiling(exp(seq(log(500), log(10000), length.out = 10))) # Varying sample sizes for Class 1
+k            <- 2                 # Number of features
+train_frac   <- 0.7               # 70% of data for training
+M_sim        <- 100               # 100 simulation iterations per n1 value
+alpha        <- 0.05              # Significance level
+
+# Run the full experiment
+results <- run_full_experiment(exp_name,
+                               mean0, mean1, cov_matrix,
+                               dist_choice0, dist_choice1,
+                               n0_fixed, n1_values,
+                               k, train_frac,
+                               M_sim, alpha)
+
+# View the interactive DT table (if running in an interactive environment)
+#results$dt_table
+
+results$power_results
+
+# Display the power plot (opens in your browser or RStudio viewer)
+results$fig_power
+
+# Display the density plot (opens in your browser or RStudio viewer)
+results$fig_density
+
+```
+
+### Experiment 2
+
+In Experiment 2, the focus shifts to a null test where both classes
+share identical means and the same normal distributions. Here, our
+expectation is that the testing method will correctly maintain the
+prescribed Type-I error rate, resulting in no significant difference
+being detected. This experiment serves as a crucial calibration check to
+ensure that any rejections observed in other scenarios are not due to
+methodological biases but rather true differences in the data.
+
+```{r bplot2}
+
+mean_0         = c(0, 0)
+mean_1         = c(0, 0)
+cov_matrix    = diag(k)
+dist_choice0  = c("normal", "normal")
+dist_choice1  = c("normal", "normal")
+n0 = 10000
+n1 = 10000
+
+plot <- bivariate_density_plot(n0, n1, k, 
+                               mean_0, mean_1, 
+                               cov_matrix, 
+                               dist_choice0, dist_choice1)
+
+
+plot
+
+```
+
+```{r Experiment2}
+mean_0         = c(3, 0)
+mean_1         = c(4, 1)
+cov_matrix    = diag(2)
+dist_choice0  = c("exponential", "uniform")
+dist_choice1  = c("uniform", "normal")
+# Example parameters
+exp_name     <- "Experiment 2: Bivariate Normal vs Bivariate Normal (Identical Means & Distributions (Null Test))"
+mean0         = c(0, 0)
+mean1         = c(0, 0)
+cov_matrix    = diag(k)
+dist_choice0  = c("normal", "normal")
+dist_choice1  = c("normal", "normal") # Use normal distribution for both features in Class 1
+n0_fixed     <- 10000              # Fixed sample size for Class 0
+n1_values    <- ceiling(exp(seq(log(500), log(10000), length.out = 10)))
+k            <- 2                 # Number of features
+train_frac   <- 0.7               # 70% of data for training
+M_sim        <- 100               # 100 simulation iterations per n1 value
+alpha        <- 0.05              # Significance level
+print(n1_values)
+#n1_values    <- c(500, 1000, 2000, 5000, 10000) # Varying sample sizes for Class 1
+# Run the full experiment
+results <- run_full_experiment(exp_name,
+                               mean0, mean1, cov_matrix,
+                               dist_choice0, dist_choice1,
+                               n0_fixed, n1_values,
+                               k, train_frac,
+                               M_sim, alpha)
+
+# View the interactive DT table (if running in an interactive environment)
+#results$dt_table
+
+results$power_results
+
+# Display the power plot (opens in your browser or RStudio viewer)
+results$fig_power
+
+# Display the density plot (opens in your browser or RStudio viewer)
+results$fig_density
+
+```
+
+### Experiment 3
+
+Experiment 3 is designed to explore a more thin case where the means of
+both classes are identical, yet the distributions differ. Specifically,
+one class uses an exponential and a normal distribution, while the other
+employs a uniform and a normal distribution. In this situation, any
+significant findings would be attributed solely to differences in
+distributional shape, such as variance or skewness, rather than
+differences in central tendency. We hypothesize that even when the means
+are equal, the test may still detect differences if the variability or
+the form of the distribution is sufficiently distinct between the
+groups.
+
+```{r bplot3}
+
+mean_0         = c(3, 0)
+mean_1         = c(3, 0)
+cov_matrix    = diag(k)
+dist_choice0  = c("exponential", "normal")
+dist_choice1  = c("uniform", "normal")
+n0 = 10000
+n1 = 10000
+
+plot <- bivariate_density_plot(n0, n1, k, 
+                               mean_0, mean_1, 
+                               cov_matrix, 
+                               dist_choice0, dist_choice1)
+
+
+plot
+
+```
+
+```{r fExperiment3, fig.width=10}
+exp_name     <- "Experiment 3: Exponential-Normal vs Uniform-Normal (Same Means, Different Distributions)"
+mean0         = c(3, 0)
+mean1         = c(3, 0)
+cov_matrix    = diag(k)
+dist_choice0  = c("exponential", "normal")
+dist_choice1  = c("uniform", "normal")
+n0_fixed     <- 10000              # Fixed sample size for Class 0
+n1_values    <- ceiling(exp(seq(log(500), log(10000), length.out = 10))) # Varying sample sizes for Class 1
+k            <- 2                 # Number of features
+train_frac   <- 0.7               # 70% of data for training
+M_sim        <- 100               # 100 simulation iterations per n1 value
+alpha        <- 0.05              # Significance level
+
+# Run the full experiment
+results <- run_full_experiment(exp_name,
+                               mean0, mean1, cov_matrix,
+                               dist_choice0, dist_choice1,
+                               n0_fixed, n1_values,
+                               k, train_frac,
+                               M_sim, alpha)
+
+# View the interactive DT table (if running in an interactive environment)
+#results$dt_table
+
+results$power_results
+
+# Display the power plot 
+results$fig_power
+
+# Display the density plot 
+results$fig_density
+```
+
+### Experiment 4
+
+Experiment 4 contrasts the normal distribution with a t-distribution
+having 5 degrees of freedom for both features. Despite identical means
+and variances set by the covariance matrix, the t-distribution’s heavy
+tails introduce additional variability, which could be picked up by the
+classifier. The expectation here is that the heavy-tailed nature of the
+t-distribution will result in a significant difference being detected,
+particularly as sample sizes grow larger and the nuances of the tail
+behavior become more apparent.
+
+```{r bplot4}
+
+mean0         = c(0, 0)
+mean1         = c(0, 0)
+cov_matrix    = diag(k)
+dist_choice0  = c("normal", "normal")
+dist_choice1  = c("t5", "t5")
+n0 = 10000
+n1 = 10000
+
+plot <- bivariate_density_plot(n0, n1, k, 
+                               mean_0, mean_1, 
+                               cov_matrix, 
+                               dist_choice0, dist_choice1)
+
+
+plot
+
+```
+
+```{r Experiment4}
+exp_name     <- "Experiment 4: Bivariate Normal vs Bivariate T5 (Same Means, Different Distributions)"
+mean0 = c(0, 0)
+mean1 = c(0, 0)
+cov_matrix = diag(k)
+dist_choice0  = c("normal", "normal")
+dist_choice1  = c("t5", "t5")
+n0_fixed     <- 10000              # Fixed sample size for Class 0
+n1_values    <- ceiling(exp(seq(log(500), log(10000), length.out = 10))) # Varying sample sizes for Class 1
+k            <- 2                 # Number of features
+train_frac   <- 0.7               # 70% of data for training
+M_sim        <- 100               # 100 simulation iterations per n1 value
+alpha        <- 0.05              # Significance level
+
+# Run the full experiment
+results <- run_full_experiment(exp_name,
+                               mean0, mean1, cov_matrix,
+                               dist_choice0, dist_choice1,
+                               n0_fixed, n1_values,
+                               k, train_frac,
+                               M_sim, alpha)
+
+# View the interactive DT table (if running in an interactive environment)
+#results$dt_table
+
+results$power_results
+
+# Display the power plot (opens in your browser or RStudio viewer)
+results$fig_power
+
+# Display the density plot (opens in your browser or RStudio viewer)
+results$fig_density
+```
+
+Overall, these experiments are designed to assess how well the testing
+procedure can differentiate between data generated under various
+conditions. We hypothesize that the power of the test will increase with
+sample size and with the magnitude of differences between the classes,
+while also remaining appropriately conservative when no true differences
+exist. This comprehensive approach allows us to validate both the
+sensitivity and the reliability of the testing method under a range of
+realistic scenarios.
+
+## Interpretation of Power Analysis Results
+
+The results of this power analysis highlight the comparative strengths
+and limitations of the Kolmogorov-Smirnov (KS) and Mann-Whitney-Wilcoxon
+(MWW) tests when applied to different types of data distributions. Since
+both are nonparametric tests, they are widely used when parametric
+assumptions such as normality cannot be guaranteed. However, their
+performance varies depending on whether the primary distinction between
+the two distributions lies in differences in their central tendency or
+in broader characteristics such as spread and shape.
+
+Overall, we observe clear cases where both tests consistently identify
+significant differences, as well as scenarios where their effectiveness
+varies, particularly at different sample sizes. The Mann-Whitney test,
+being rank-based, is primarily sensitive to shifts in the central
+location (median), whereas the Kolmogorov-Smirnov test focuses on the
+overall shape of the distributions. Understanding how these tests behave
+in different experimental settings is crucial for making informed
+statistical decisions.
+
+### Experiment 1 Consists in Detecting Differences in Both Means and Distributional Shape
+
+This experiment examines two distributions that differ both in their
+central location and overall structure, as one follows an
+exponential-uniform combination while the other consists of a
+uniform-normal mixture. Since the distinction between these
+distributions is strong and evident in multiple dimensions, both the MWW
+and KS tests consistently detect significant differences across all
+sample sizes.
+
+This scenario represents an ideal case where both tests are highly
+effective, reinforcing their utility in situations where groups differ
+in multiple respects. Because both the median and the overall shape of
+the distributions are distinct, the statistical power remains high even
+at smaller sample sizes, confirming that rejecting the null hypothesis
+in such cases is highly justified.
+
+### Experiment 2 Consists in Testing Under the Null Hypothesis
+
+In this experiment, both samples are drawn from the same normal
+distribution, providing a necessary control to ensure that the tests do
+not falsely detect differences when none exist. As expected, the power
+of both tests remains low across all sample sizes, correctly maintaining
+the expected Type-I error rate. These results confirm that both tests
+are well calibrated under the null hypothesis, meaning that they do not
+exhibit an inflated tendency to reject $H_0$ when there is no real
+difference between the distributions. This validation is crucial because
+a test that falsely identifies differences too often could lead to
+misleading conclusions in real-world applications.
+
+### Experiment 3 Consists in Detecting Differences in Shape Without a Shift in Central Location
+
+In this case, the distributions share the same mean but differ in shae,
+one following an exponential-normal structure while the other follows a
+uniform-normal combination. The MWW test, which is sensitive to shifts
+in central tendency, shows a gradual but relatively slow increase in
+power as the sample size grows. This suggests that differences in the
+central ranking of the two distributions are not pronounced. On the
+other hand, the KS test, which detects discrepancies in the entire
+distribution shape, exhibits a faster growth in power. This indicates
+that the primary distinguishing factor between the two classes is not a
+location shift but differences in distributional shape, particularly in
+the tails or variance structure. The KS test's higher sensitivity in
+this context is expected, given that the exponential distribution has a
+more pronounced skew and heavier tail compared to the uniform
+distribution. As sample sizes increase, both tests gain more power, but
+the KS test consistently outperforms MWW in identifying the
+distributional difference. This experiment reinforces an important
+consideration, when differences between groups are due to aspects beyond
+the median, such as variance, skewness, or multimodality, the KS test is
+generally the better choice. The MWW test remains more appropriate when
+the primary distinction lies in central tendency.
+
+### Experiment 4 and The Challenge of Heavy-Tailed Distributions
+
+This analysis illustrates the contrasting behavior of the MWW and KS
+tests when applied to distributions that share the same mean and
+variance but differ in tail behavior. The Mann–Whitney test, which is
+fundamentally designed to detect shifts in median, struggles in this
+setting as the distributions have the same central tendency. Its power
+remains low regardless of sample size, indicating that it is not
+well-suited for capturing differences that manifest primarily in the
+distribution tails. The KS test, in contrast, is more effective in
+detecting differences in overall distribution shape. Its increasing
+power trend as sample size grows suggests that it successfully
+identifies the impact of the heavier tails of the t-distribution
+compared to the normal distribution. This reinforces the idea that tail
+differences, while thin in small samples, become more distinguishable as
+more data is available, making KS a stronger choice in detecting such
+structural variations. However, the limitations of both tests become
+apparent when the primary differences lie in the distribution extremes
+rather than the central portion. While the KS test can capture
+deviations in cumulative distribution behavior, its ability to detect
+tail discrepancies remains constrained by the fact that extreme values
+occur infrequently.
+
+### Final Conclusions
+
+The findings from this power analysis emphasize the importance of
+selecting statistical tests based on the characteristics of the data and
+the specific hypothesis being tested. When both the median and shape
+differ, as in Experiment 1, both tests perform well. When only the shape
+differs (Experiment 3), the KS test is generally more effective,
+particularly at smaller sample sizes. However, when differences are
+confined to tail behavior (Experiment 4), neither test exhibits strong
+power, suggesting that specialized methods may be necessary.
+
+Thus, researchers should carefully consider their data characteristics
+before choosing a test. If the focus is only on median shifts, the MWW
+test is appropriate. If the goal is to compare full distributions, the
+KS test is often the better choice. In cases where uncertainty exists,
+applying both tests and evaluating their combined conclusions provides a
+more well-rounded statistical assessment.
+
+# Part 3
+
+In this section, we apply Friedman's procedure to our HR dataset. The
+dataset consists of 60-second measurements of speed and altitude
+collected from various runs performed in different environments and
+under different conditions.
+
+Each row in the dataset represents one minute (60 seconds) of running,
+while the columns are structured as follows:
+
+-   **y**: The HR zone variable, which can take one of three values:
+    Zone-2, Zone-3, or Zone-4.
+
+-   **Columns 2 to 61**: Speed in meters per second, recorded once per
+    second.
+
+-   **Columns 62 to 121**: Altitude in meters above sea level, recorded
+    once per second.
+
+Let's see the one row:
+
+```{r}
+
+# Load the dataset
+load("hw_data.RData")  
+
+# Remove the rows with missing values
+hw <- hw[complete.cases(hw),]  
+
+# Show the first row 
+hw[1,]
+```
+
+------------------------------------------------------------------------
+
+## Features Embedding
+
+To perform classification and apply Friedman's procedure, we reduce the
+number of features by embedding the time series data for speed and
+altitude. As a first step, we visualize the time series graphically.
+
+```{r, fig.width=15, fig.height=5, fig.align='center'}
+par(mfrow = c(1, 2))  
+
+# Speed and altitude plot for Zone-2 
+plot(1:60, hw[hw$y == "Zone-2", 2:61][1,], type = "l", col = "red", xlab = "Seconds", ylab = "Speed (m/s)", main = "Speed Zone-2") 
+plot(1:60, hw[hw$y == "Zone-2", 62:121][1,], type = "l", col = "blue", xlab = "Seconds", ylab = "Altitude (m)", main = "Altitude Zone-2")  
+
+# Speed and altitude plot for Zone-3 
+plot(1:60, hw[hw$y == "Zone-3", 2:61][60,], type = "l", col = "red", xlab = "Seconds", ylab = "Speed (m/s)", main = "Speed Zone-3") 
+plot(1:60, hw[hw$y == "Zone-3", 62:121][1,], type = "l", col = "blue", xlab = "Seconds", ylab = "Altitude (m)", main = "Altitude Zone-3")  
+
+# Speed and altitude plot for Zone-4 
+plot(1:60, hw[hw$y == "Zone-4", 2:61][1,], type = "l", col = "red", xlab = "Seconds", ylab = "Speed (m/s)", main = "Speed Zone-4") 
+plot(1:60,  hw[hw$y == "Zone-4", 62:121][1,], type = "l", col = "blue", xlab = "Seconds", ylab = "Altitude (m)", main = "Altitude Zone-4")  
+
+par(mfrow = c(1, 1))
+```
+
+Apparently, speed does not provide much insight into the associated HR
+zone. On the other hand, altitude exhibits more variability, with
+significant fluctuations in Zones 3 and 4. Zone 2, in contrast, shows a
+gradual decline in altitude over time.
+
+### Embedded Features Selection
+
+To reduce the dimensionality of these time series, we apply statistical
+functionals. The following features have been selected:
+
+-   **Mean**: Represents the average value of the time series, providing
+    an overall measure of central tendency.
+
+-   **Standard Deviation**: Measures the dispersion of values around the
+    mean, capturing variability within the time series.
+
+-   **Slope**: Represents the rate of change in the signal, useful for
+    identifying significant increases or decreases in speed or altitude
+    over time.
+
+-   **Standard Deviation of the Slope**: Measures the variability of the
+    rate of change, indicating how consistently the speed or altitude
+    fluctuates over the window.
+
+-   **Minimum and Maximum**: Capture the lowest and highest recorded
+    values, helping to define the range within which the time series
+    varies.
+
+By applying these functionals, we reduce the number of features
+significantly. Initially, we had **120 features** per row (60 for speed
+and 60 for altitude). After transformation, we obtain **5 global
+features** (mean, standard deviation, slope, standard deviation of
+slope, min, and max).
+
+Next, we visualize how these selected features effectively describe the
+signal by examining a sample speed time series.
+
+```{r}
+row <- hw[hw$y == "Zone-2", 2:61][2,] 
+
+row_stat <- summary_function(row) 
+row_stat
+```
+
+```{r}
+# Plot a speed time series 
+
+plot(1:60, row, type = "l", col = "black", xlab = "Seconds", ylab = "Speed (m/s)", main = "Speed Zone-2 - Global Features")  
+
+# Plot the mean 
+abline(h = row_stat[1], col = "blue")  
+
+# Plot the Max and Min 
+abline(h = row_stat[5], col = "red") 
+abline(h = row_stat[6], col = "red")  
+# Plot the SD range  
+abline(h = row_stat[1] + row_stat[2], col = "purple", lty = "dashed") 
+abline(h = row_stat[1] - row_stat[2], col = "purple", lty = "dashed")  
+
+# Build the line with the slope given by the summary_function 
+# It will pass from the mean value in the mean x value (30) 
+b <- row_stat[1] - row_stat[3]*30 
+
+range_value <- 1:60 
+line_slope <- row_stat[3]*range_value + b  
+lines(range_value, line_slope, col = "darkgrey")  
+# Add legend 
+legend("topright", legend = c("Mean", "Mean ± SD", "Min/Max"), fill = c("blue", "purple","red"))  
+
+# Remove non necessary variables 
+rm(row, b, line_slope, range_value, row_stat)
+```
+
+Almost all the statistical features are displayed in the plot. Regarding
+the standard deviation of the slope (SD Slope = 0.035), it quantifies
+the variability in the rate of change of speed over time. A low SD slope
+value indicates that the acceleration or deceleration remains relatively
+stable, with only minor fluctuations.
+
+Examining the plot for "Speed in Zone-2", we observe a general downward
+trend with some local variations. The SD slope value suggests that while
+fluctuations are present, they are not highly erratic, reinforcing the
+idea that speed changes occur in a relatively smooth and controlled
+manner.
+
+This metric effectively captures the consistency of speed variations
+over time, making it a valuable feature for distinguishing between
+different HR zones.
+
+```{r}
+# Apply the embedding to the dataset
+
+speed_stat <- t(apply(hw[,2:61], 1, summary_function))
+altitude_stat <- t(apply(hw[,62:121], 1, summary_function))
+
+# Add the "v" and "a" to the names of the columns to make them recognizable
+colnames(speed_stat) <- paste("v", colnames(speed_stat), sep = "_")
+colnames(altitude_stat) <- paste("a", colnames(altitude_stat), sep = "_")
+
+# Combine the statistics of speed and altitude 
+hw_stats <- cbind(speed_stat, altitude_stat)
+
+# Remove non necessary variables
+rm(speed_stat, altitude_stat)
+
+hw_stats <- as.data.frame(hw_stats)
+
+# Add the labels 0,1,2 for each zone
+hw_stats$label <- ifelse(hw$y == "Zone-2", 0, 
+              ifelse(hw$y == "Zone-3", 1, 
+              ifelse(hw$y == "Zone-4", 2, NA)))
+
+#Remove the rows with missing values
+hw_stats <- hw_stats[complete.cases(hw_stats),]
+```
+
+### Embedded Features Analysis
+
+To apply Friedman's procedure, we employ a Random Forest classifier.
+This choice is driven by our desire to capture potential non-linear
+relationships in the embedded features—relationships that might be
+overlooked by a generalized linear model (GLM).
+
+Having selected Random Forest, we assess how effectively the embedded
+features represent the data and examine their degree of correlation. We
+also investigate whether correlation influences the model’s performance,
+while recognizing that Random Forest is generally robust to correlated
+predictors.
+
+```{r}
+find_uncorrelated_features(hw_stats, correlation_threshold = 0.8)
+```
+
+The high correlation among these variables indicates that they contain
+nearly identical information, making them redundant. Keeping all three
+does not contribute additional unique insights to the model and may not
+improve predictive performance.
+
+Although Random Forest is generally robust to multicollinearity, the
+presence of redundant features can still lead to inefficiencies. It may
+increase computational cost and introduce overfitting, as the model
+could assign excessive importance to these highly correlated variables.
+
+Since a_mean, a_min, and a_max are almost perfectly correlated, it is
+recommended to retain only one of them, typically a_mean, as it
+represents the central tendency. Removing the others should not
+negatively affect model performance while improving efficiency.
+
+To further evaluate the impact of correlated and uncorrelated features
+on classification performance, we will run the Random Forest classifier
+with 100 trees and 1000 trees on classify Zone-2 and Zone-3 data,
+comparing the results to determine if increasing the number of trees
+significantly affects performance. If the model performs well with fewer
+trees, we will prioritize the lighter version to optimize computational
+efficiency while ensuring reliable results for Friedman's procedure.
+
+```{r message=FALSE, warning=FALSE}
+#Select the target data 
+data_2_3 <- hw_stats[hw_stats$label == 0 | hw_stats$label == 1,]  
+
+uncorr_data_2_3 <- hw_stats[hw_stats$label == 0 | hw_stats$label == 1, setdiff(names(hw_stats), c("a_min", "a_max"))]  
+
+result_100 <- hold_out_evaluation_RF(data_2_3, ntree = 100) 
+result_100_uncorr <- hold_out_evaluation_RF(uncorr_data_2_3, ntree = 100)
+
+result_1000 <- hold_out_evaluation_RF(data_2_3, ntree = 1000) 
+result_1000_uncorr <- hold_out_evaluation_RF(uncorr_data_2_3, ntree = 1000)  
+
+cbind(result_100, result_100_uncorr, result_1000, result_1000_uncorr) 
+
+rm(result_100, result_100_uncorr, result_1000, result_1000_uncorr) 
+rm(uncorr_data_2_3)
+```
+
+The results indicate that the classification performance remains
+relatively stable across different conditions, with minimal differences
+between the models trained on correlated and uncorrelated features, as
+well as between those using 100 and 1000 trees.
+
+The accuracy values show a slight improvement when increasing the number
+of trees from 100 to 1000, but the difference is marginal, with a
+maximum variation of approximately 0.13%. Similarly, the ROC AUC values
+remain consistent, showing only minor fluctuations, which suggests that
+the model's ability to distinguish between classes does not
+significantly depend on either the number of trees or the presence of
+correlated features.
+
+Precision, recall, and F1-score values exhibit similar trends, with
+variations that are negligible in practical terms. The slight
+improvements observed in the models with 1000 trees indicate that a
+larger ensemble can enhance stability, but the gain is not substantial
+enough to justify the increased computational cost.
+
+Given these findings, the use of **correlated features does not
+significantly impact** model performance, suggesting that feature
+selection may not be strictly necessary in this case. Furthermore, since
+the results obtained with 100 trees are nearly identical to those with
+1000 trees, it is reasonable to conclude that using **100 trees is a
+more efficient choice**, as it provides comparable performance while
+reducing computational overhead.
+
+------------------------------------------------------------------------
+
+## **Testing the hypothesis of** $H_0 :F_2 = F_3$
+
+To test this hypothesis using Friedman's procedure, we employ a **Random
+Forest classifier with 100 trees**, as previously discussed. To
+calculate the p-value, and to avoid making strong parametric assumptions
+about the given data, we perform **a permutation test**. This involves
+generating a distribution of permuted test statistics and computing the
+p-value as the proportion of times the permuted statistic is greater
+than or equal to the observed test statistic. The obtained p-value is
+then compared against a significance level (α = 0.05) to determine
+whether to reject the null hypothesis, ensuring a strong statistical
+rejection criterion.
+
+For the statistical test, we initially choose the **Wilcoxon
+Mann-Whitney test**, despite previous observations suggesting that the
+Kolmogorov-Smirnov test may have greater statistical power. The
+rationale behind selecting Wilcoxon first is that it specifically
+assesses differences in central tendency between distributions while
+maintaining robustness to outliers and non-normality. In contrast, the
+KS test is more sensitive to differences in both location and shape,
+making it more powerful in detecting broader distributional shifts. If
+the Wilcoxon test fails to reject the null hypothesis, we will then
+apply the KS test to ensure that potential differences in distributional
+shape are not overlooked.
+
+Additionally, while the dataset exhibits class imbalance previous
+analysis (Part 2) indicated that if the distributions are sufficiently
+different, the statistical test should still reject the null hypothesis,
+even in the presence of imbalance. This suggests that, despite the class
+imbalance, the test remains a valid tool for assessing significant
+distributional differences.
+
+```{r}
+# In order to avoid to repeat the permutation test, we save the results on three datasets 
+
+load("permutations/perm_test_2_3.RData")
+results_2_3 <- list(zero_scores, one_scores, test_statistic, p_value, null_distribution)
+
+load("permutations/perm_test_2_4.RData")
+results_2_4 <- list(zero_scores, one_scores,
+test_statistic, p_value, null_distribution)
+
+load("permutations/perm_test_3_4.RData")
+results_3_4 <- list(zero_scores, one_scores,
+test_statistic, p_value, null_distribution)
+```
+
+```{r}
+#results_2_3 <- perm_test_pvalue(data_2_3, ntree = 100, file_name = "permutations/perm_test_2_3.RData")
+
+alpha <- 0.05
+
+p_value_2_3 <- results_2_3[[4]]
+test_stat_2_3 <- results_2_3[[3]]
+
+# Decision rule
+reject_2_3 <- p_value_2_3 < alpha
+
+# Print results
+cat("Empirical p-value:", p_value_2_3, "\nTest statistic:", test_stat_2_3, "\nReject null hypothesis:", reject_2_3, "\n")
+```
+
+```{r}
+null_distribution_2_3 <- results_2_3[[5]]
+
+plot(density(null_distribution_2_3) , col = "blue", main = "Null Distribution - Zone-2 | Zone-3", xlab = "Scores", lwd = 2)
+```
+
+Since the empirical **p-value is 0** and the null distribution follows a
+normal pattern, the null hypothesis is strongly rejected. A p-value of 0
+indicates that, across all permutation tests, there was no instance
+where the permuted test statistic was greater than or equal to the
+observed test statistic. This suggests an extremely strong statistical
+rejection of the null hypothesis at any conventional significance level,
+including 0.05 or even stricter thresholds.
+
+The results provide compelling evidence that the feature distributions
+across zones 2 and 3 are significantly different, providing strong
+validation that the selected features effectively capture meaningful
+differences between zones and are suitable for classification. Since the
+null hypothesis assumes that these distributions are identical, the
+observed difference is unlikely to be due to random variation and
+instead reflects substantial and meaningful structural changes in the
+data.
+
+Additionally, the empirical distribution of the test statistic exhibits
+a bell-shaped curve, indicating that the permutation test behaves as
+expected. The normal-like shape suggests that the test statistic is
+well-distributed under random permutations, reinforcing the reliability
+of the statistical inference. This confirms that the permutation
+procedure is well-calibrated and robust, further supporting the validity
+of the test results.
+
+------------------------------------------------------------------------
+
+## **Testing the hypothesis of** $H_0 :F_2 = F_3 = F_4$
+
+To perform the multiple hypothesis testing for the equality of
+distributions $F_2 = F_3 = F_4$, we decompose it into three pairwise
+comparisons $F_2 = F_3$ , $F_2 = F_4$ and $F_3 = F_4$ . For each
+comparison, we calculate the p-value using the **same approach as
+before**, ensuring a robust and empirical estimation of statistical
+significance.
+
+Given that multiple hypotheses are being tested simultaneously, we
+account for the increased risk of Type I errors by applying
+**Bonferroni’s correction.** Specifically, we adjust the significance
+threshold by dividing the conventional alpha level by the number of
+hypotheses tested, resulting, in this case, in an adjusted threshold of
+$\alpha / 3$ . This conservative approach ensures that the overall
+family-wise error rate remains controlled, thereby strengthening the
+reliability of the conclusions drawn from the multiple comparisons.
+
+```{r}
+data_2_4 <- hw_stats[hw_stats$label == 0 | hw_stats$label == 2,]
+
+data_3_4 <- hw_stats[hw_stats$label == 1 | hw_stats$label == 2,]
+
+# Change the Zone-4 label to 1 for binary classification
+data_2_4$label <- ifelse(data_2_4$label == 2, 1, data_2_4$label)
+
+# Change the Zone-4 label to 0 for binary classification
+data_3_4$label <- ifelse(data_3_4$label == 2, 0, data_3_4$label)
+
+#results_2_4 <- perm_test_pvalue(data_2_4, ntree = 100, file_name = "permutations/perm_test_2_4.RData")
+
+#results_3_4 <- perm_test_pvalue(data_3_4, ntree = 100, file_name = "permutations/perm_test_3_4.RData")
+
+alpha <- 0.05 / 3
+
+p_value_2_4 <- results_2_4[[4]]
+test_stat_2_4 <- results_2_4[[3]]
+
+p_value_3_4 <- results_3_4[[4]]
+test_stat_3_4 <- results_3_4[[3]]
+
+
+# Decision rule
+reject_multi <- p_value_2_3 < alpha & p_value_2_4 < alpha & p_value_3_4 < alpha
+
+# Print results
+cat("Empirical p-value (Zone-2 vs. Zone-3):", p_value_2_3,
+    "\nTest statistic (Zone-2 vs. Zone-3):", test_stat_2_3,
+    "\n--------------",
+    "\nEmpirical p-value (Zone-2 vs. Zone-4):", p_value_2_4,
+    "\nTest statistic (Zone-2 vs. Zone-4):", test_stat_2_4,
+    "\n--------------",
+    "\nEmpirical p-value (Zone-3 vs. Zone-4):", p_value_3_4,
+    "\nTest statistic (Zone-3 vs. Zone-4):", test_stat_3_4,
+    "\n--------------",
+    "\nReject null hypothesis:", reject_multi)
+```
+
+```{r}
+null_distribution_2_3 <- results_2_3[[5]]
+
+plot(density(null_distribution_2_3), col = "blue", main = "Null Distribution - Zone-2 | Zone-3", xlab = "Values", lwd = 2)
+
+null_distribution_2_4 <- results_2_4[[5]]
+
+plot(density(null_distribution_2_4), col = "blue", main = "Null Distribution - Zone-2 | Zone-4", xlab = "Values", lwd = 2)
+
+null_distribution_3_4 <- results_3_4[[5]]
+
+plot(density(null_distribution_3_4), col = "blue", main = "Null Distribution - Zone-3 | Zone-4", xlab = "Values", lwd = 2)
+```
+
+For the comparisons of Zone-2 vs. Zone-4 and Zone-3 vs. Zone-4, the
+empirical p-values are 0, mirroring the results seen in the Zone-2 vs.
+Zone-3 comparison. This consistent outcome across all comparisons
+underscores **a strong rejection of the null hypothesis**, indicating
+that the feature distributions are significantly different across these
+zones.
+
+The null distribution plots for these comparisons also display a
+bell-shaped curve, similar to the Zone-2 vs. Zone-3 comparison.
+
+These findings collectively suggest that the selected features are
+effective in capturing meaningful differences between the zones,
+supporting their suitability for classification tasks. The consistent
+rejection of the null hypothesis across all comparisons highlights
+substantial structural changes in the data, affirming that the observed
+differences are not due to random variation.
+
+```{r}
+# Density plot for each class
+plot(density(results_2_3[[2]]), col = "blue", main = "Density Plot of Scores - Zone2 | Zone-3", xlab = "Scores", lwd = 2)
+lines(density(results_2_3[[1]]), col = "red", lwd = 2)
+legend("topleft", legend = c("Zone-2", "Zone-3"), fill = c("red", "blue"))
+
+plot(density(results_2_4[[2]]), col = "blue", main = "Density Plot of Scores - Zone-2 | Zone-4", xlab = "Scores", lwd = 2)
+lines(density(results_2_4[[1]]), col = "red", lwd = 2)
+legend("topleft", legend = c("Zone-2", "Zone-4"), fill = c("red", "blue"))
+
+plot(density(results_3_4[[2]]), col = "blue", main = "Density Plot of Scores - Zone-3 | Zone-4", xlab = "Scores", lwd = 2)
+lines(density(results_3_4[[1]]), col = "red", lwd = 2)
+legend("topleft", legend = c("Zone-3", "Zone-4"), fill = c("red", "blue"))
+```
+
+In the comparison between Zone-2 and Zone-3, the density plot for Zone-2
+exhibits a relatively flat distribution with a slight peak around the
+score of 0.8, indicating a dispersed range of scores with a minor
+concentration in the mid-range. Conversely, Zone-3 displays a sharp peak
+near the score of 1.0, suggesting a high concentration of scores at the
+maximum, which reflects the classifier's high confidence in predictions
+for Zone-3.
+
+The density plot for the comparison between Zone-3 and Zone-4 reveals
+that both zones exhibit peaks around the score of 1.0, although Zone-3's
+peak is slightly less pronounced than in the previous comparison. This
+indicates a high concentration of scores near the maximum for both
+zones, with some variability observed in Zone-3.
+
+In the comparison between Zone-2 and Zone-4, Zone-2 density plot shows a
+peak around the score of 1.0, but with more variability compared to the
+other plots. Zone-4, on the other hand, exhibits a very sharp peak
+around the score of 1.0, indicating a high concentration of scores near
+the maximum and reflecting the classifier's high confidence in
+predictions for Zone-4.
+
+The empirical p-value obtained through permutation tests is consistently
+0, leading to the rejection of the null hypothesis of identical
+distributions. This suggests that the score distributions for the
+different zones are significantly different from each other. The
+distinct peaks and differences in the density plots indicate that the
+classifier effectively distinguishes between the zones, despite the
+class imbalance. The high confidence in predictions, as evidenced by the
+sharp peaks near the maximum score, further supports the classifier's
+performance in differentiating between the zones.
