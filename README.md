@@ -66,7 +66,7 @@ Apply Friedman's procedure to a dataset of heart rate (HR) zones in running, usi
   - Include the HR dataset in RData
   - **module/**: Contains three R files with custom functions, each corresponding to a part of the homework.
   - **permutations/**: Contains RData files with the results of the permutation tests to avoid recomputation.
-- **Homework-SDS.html**: The main HTML file containing plots, results, and analysis.
+- **HW-SDS.html**: The main HTML file containing plots, results, and analysis.
 
 ## Contributors
 
